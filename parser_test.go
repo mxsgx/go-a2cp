@@ -204,3 +204,29 @@ func TestParseFileWithIncludeResolutionUsesBasePath(t *testing.T) {
 		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
 	}
 }
+
+func TestParseFileWithIncludeResolutionIncludeBadGlobReturnsError(t *testing.T) {
+	_, err := ParseFile(
+		"testdata/parser/include-badglob/include-bad.conf",
+		WithIncludeResolution("testdata/parser/include-badglob"),
+	)
+	if err == nil {
+		t.Fatalf("ParseFile() expected bad glob error for Include")
+	}
+	if !strings.Contains(err.Error(), "resolve include pattern") {
+		t.Fatalf("error = %v, want bad glob include pattern message", err)
+	}
+}
+
+func TestParseFileWithIncludeResolutionIncludeOptionalBadGlobReturnsError(t *testing.T) {
+	_, err := ParseFile(
+		"testdata/parser/include-badglob/optional-bad.conf",
+		WithIncludeResolution("testdata/parser/include-badglob"),
+	)
+	if err == nil {
+		t.Fatalf("ParseFile() expected bad glob error for IncludeOptional")
+	}
+	if !strings.Contains(err.Error(), "resolve include pattern") {
+		t.Fatalf("error = %v, want bad glob include pattern message", err)
+	}
+}
