@@ -250,6 +250,12 @@ func parseIncludedFile(path string, cfg parseOptions, state *includeState) (*Doc
 	defer f.Close()
 
 	baseDir := filepath.Dir(canonical)
+	if cfg.basePath != "" {
+		baseDir, err = canonicalPath(cfg.basePath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return parseReaderWithContext(f, baseDir, cfg, state)
 }
 

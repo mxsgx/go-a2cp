@@ -178,3 +178,29 @@ func TestParseFileWithIncludeResolutionCircular(t *testing.T) {
 		t.Fatalf("error = %v, want circular include message", err)
 	}
 }
+
+func TestParseFileWithIncludeResolutionUsesBasePath(t *testing.T) {
+	doc, err := ParseFile(
+		"testdata/parser/include-basepath/main/main.conf",
+		WithIncludeResolution("testdata/parser/include-basepath"),
+	)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 3 {
+		t.Fatalf("statements = %d, want 3", got)
+	}
+
+	if d, ok := doc.Statements[0].(Directive); !ok || d.Name != "ServerRoot" {
+		t.Fatalf("statement[0] mismatch: %#v", doc.Statements[0])
+	}
+
+	if d, ok := doc.Statements[1].(Directive); !ok || d.Name != "PidFile" || len(d.Args) != 1 || d.Args[0] != "/var/run/apache2.pid" {
+		t.Fatalf("statement[1] mismatch: %#v", doc.Statements[1])
+	}
+
+	if d, ok := doc.Statements[2].(Directive); !ok || d.Name != "User" || len(d.Args) != 1 || d.Args[0] != "www-data" {
+		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+	}
+}
