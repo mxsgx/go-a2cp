@@ -2,22 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## v0.1.0
+## Unreleased
 
 ### Added
-- Initial Apache2 .conf parser.
-- AST types for directives, blocks, documents, and positions.
-- AST manipulation helpers.
-- Builder-style API for creating configs from scratch.
-- Rendering and file save support.
-- Runnable examples under `examples/`.
-- Test fixture layout under `testdata/`.
-- GitHub Actions CI workflow.
-- GitHub Actions release workflow.
-- Versioning policy documentation in `VERSIONING.md`.
-- Contributor, security, code-of-conduct, and AI guidance docs.
+- No unreleased changes yet.
 
-## Unreleased
+## v0.2.0 - 2026-04-17
 
 ### Added
 - Functional parse option `WithIncludeResolution(basePath string)`.
@@ -31,3 +21,18 @@ All notable changes to this project will be documented in this file.
 - `ParseReader` now accepts parse options: `ParseReader(r io.Reader, opts ...ParseOption)`.
 - `ParseFile` now accepts parse options: `ParseFile(path string, opts ...ParseOption)`.
 - `ParseFile` include resolution now consistently honors `basePath` when provided, including nested includes.
+
+## v0.1.0 - 2026-04-16
+
+### Added
+- Initial Apache2 .conf parser.
+- AST types for directives, blocks, documents, and positions.
+- AST manipulation helpers.
+- Builder-style API for creating configs from scratch.
+- Rendering and file save support.
+- Runnable examples under `examples/`.
+- Test fixture layout under `testdata/`.
+- GitHub Actions CI workflow.
+- GitHub Actions release workflow.
+- Versioning policy documentation in `VERSIONING.md`.
+- Contributor, security, code-of-conduct, and AI guidance docs.
