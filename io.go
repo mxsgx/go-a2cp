@@ -6,14 +6,10 @@ import (
 )
 
 // ParseFile parses an Apache2 .conf file from disk.
-func ParseFile(path string) (*Document, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	return ParseReader(f)
+func ParseFile(path string, opts ...ParseOption) (*Document, error) {
+	cfg := applyParseOptions(opts)
+	state := &includeState{inProgress: make(map[string]struct{})}
+	return parseIncludedFile(path, cfg, state)
 }
 
 // WriteTo writes the document as Apache2 config to w.

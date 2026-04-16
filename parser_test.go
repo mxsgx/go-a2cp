@@ -1,6 +1,9 @@
 package a2cp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDirectivesAndComments(t *testing.T) {
 	src := `
@@ -136,5 +139,42 @@ func TestParseFileFixture(t *testing.T) {
 	}
 	if len(directory.Children) != 1 {
 		t.Fatalf("Directory children = %d, want 1", len(directory.Children))
+	}
+}
+
+func TestParseFileWithIncludeResolutionHappyPath(t *testing.T) {
+	doc, err := ParseFile("testdata/parser/include/main.conf", WithIncludeResolution("testdata/parser/include"))
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
+	}
+
+	if d, ok := doc.Statements[0].(Directive); !ok || d.Name != "ServerRoot" {
+		t.Fatalf("statement[0] mismatch: %#v", doc.Statements[0])
+	}
+
+	if d, ok := doc.Statements[1].(Directive); !ok || d.Name != "User" || len(d.Args) != 1 || d.Args[0] != "www-data" {
+		t.Fatalf("statement[1] mismatch: %#v", doc.Statements[1])
+	}
+
+	if b, ok := doc.Statements[2].(*Block); !ok || b.Name != "Directory" {
+		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+	}
+
+	if d, ok := doc.Statements[3].(Directive); !ok || d.Name != "Listen" || len(d.Args) != 1 || d.Args[0] != "80" {
+		t.Fatalf("statement[3] mismatch: %#v", doc.Statements[3])
+	}
+}
+
+func TestParseFileWithIncludeResolutionCircular(t *testing.T) {
+	_, err := ParseFile("testdata/parser/include-circular/a.conf", WithIncludeResolution("testdata/parser/include-circular"))
+	if err == nil {
+		t.Fatalf("ParseFile() expected circular include error")
+	}
+	if !strings.Contains(err.Error(), "circular include") {
+		t.Fatalf("error = %v, want circular include message", err)
 	}
 }

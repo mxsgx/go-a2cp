@@ -9,6 +9,7 @@
 - Handles `#` comments (including inline comments)
 - Supports quoted arguments (`"..."` and `'...'`)
 - Supports line continuation using trailing `\\`
+- Optional recursive include resolution for `Include` and `IncludeOptional`
 - Supports AST manipulation (append/insert/remove/find)
 - Supports creating configs from scratch (builder-style API)
 - Renders and writes modified config back to file
@@ -62,8 +63,9 @@ func main() {
 ## Public API
 
 - `ParseString(src string) (*Document, error)`
-- `ParseReader(r io.Reader) (*Document, error)`
-- `ParseFile(path string) (*Document, error)`
+- `ParseReader(r io.Reader, opts ...ParseOption) (*Document, error)`
+- `ParseFile(path string, opts ...ParseOption) (*Document, error)`
+- `WithIncludeResolution(basePath string) ParseOption`
 - `NewDocument() *Document`
 - `NewDirective(name string, args ...string) Directive`
 - `NewBlock(name string, args ...string) *Block`
@@ -101,6 +103,8 @@ Runnable examples are available in `examples/`:
 
 - `examples/parse-string`: parse config from in-memory string
 - `examples/parse-file`: parse a `.conf` file from disk
+- `examples/include-resolution`: parse config with recursive `Include` expansion
+- `examples/include-optional-skip`: parse config with missing `IncludeOptional` target (skipped)
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -109,6 +113,8 @@ Run each example from repository root:
 ```bash
 go run ./examples/parse-string
 go run ./examples/parse-file
+go run ./examples/include-resolution
+go run ./examples/include-optional-skip
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```
