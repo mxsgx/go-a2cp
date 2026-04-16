@@ -204,9 +204,6 @@ func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, stat
 
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
-			if isOptional {
-				continue
-			}
 			return nil, fmt.Errorf("resolve include pattern %q: %w", rawPattern, err)
 		}
 
