@@ -20,4 +20,14 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
-- No unreleased changes yet.
+- Functional parse option `WithIncludeResolution(basePath string)`.
+- Recursive resolution for Apache2 `Include` and `IncludeOptional` directives.
+- Glob-based include matching using `filepath.Glob`.
+- Circular include detection with path tracking.
+- Parser fixtures for include resolution and circular include cases.
+- Runnable examples for include resolution and `IncludeOptional` skip behavior.
+
+### Changed
+- `ParseReader` now accepts parse options: `ParseReader(r io.Reader, opts ...ParseOption)`.
+- `ParseFile` now accepts parse options: `ParseFile(path string, opts ...ParseOption)`.
+- `ParseFile` include resolution now consistently honors `basePath` when provided, including nested includes.
