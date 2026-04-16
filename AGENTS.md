@@ -36,6 +36,8 @@ This repository contains `go-a2cp`, a Go library for parsing and manipulating Ap
 - `go run ./examples/parse-file`
 - `go run ./examples/manipulate-save`
 - `go run ./examples/from-scratch`
+- `go run ./examples/include-resolution`
+- `go run ./examples/include-optional-skip`
 
 ## Test Fixture Conventions
 

@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -19,13 +21,59 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error at %d:%d: %s", e.Line, e.Column, e.Message)
 }
 
+// ParseOption configures parser behavior.
+type ParseOption func(*parseOptions)
+
+type parseOptions struct {
+	includeResolution bool
+	basePath          string
+}
+
+type includeState struct {
+	inProgress map[string]struct{}
+}
+
+func defaultParseOptions() parseOptions {
+	return parseOptions{}
+}
+
+func applyParseOptions(opts []ParseOption) parseOptions {
+	cfg := defaultParseOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	return cfg
+}
+
+// WithIncludeResolution enables recursive resolution of Include and IncludeOptional directives.
+//
+// Relative include paths are resolved from basePath.
+func WithIncludeResolution(basePath string) ParseOption {
+	return func(cfg *parseOptions) {
+		cfg.includeResolution = true
+		cfg.basePath = basePath
+	}
+}
+
 // ParseString parses Apache2 configuration text.
 func ParseString(src string) (*Document, error) {
 	return ParseReader(strings.NewReader(src))
 }
 
 // ParseReader parses Apache2 configuration from an io.Reader.
-func ParseReader(r io.Reader) (*Document, error) {
+func ParseReader(r io.Reader, opts ...ParseOption) (*Document, error) {
+	cfg := applyParseOptions(opts)
+	state := &includeState{inProgress: make(map[string]struct{})}
+	baseDir := "."
+	if cfg.basePath != "" {
+		baseDir = cfg.basePath
+	}
+	return parseReaderWithContext(r, baseDir, cfg, state)
+}
+
+func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state *includeState) (*Document, error) {
 	logicalLines, err := readLogicalLines(r)
 	if err != nil {
 		return nil, err
@@ -98,7 +146,130 @@ func ParseReader(r io.Reader) (*Document, error) {
 		return nil, &ParseError{Line: top.Pos.Line, Column: top.Pos.Column, Message: fmt.Sprintf("unclosed block <%s>", top.Name)}
 	}
 
+	if cfg.includeResolution {
+		resolved, err := resolveIncludeStatements(doc.Statements, baseDir, cfg, state)
+		if err != nil {
+			return nil, err
+		}
+		doc.Statements = resolved
+	}
+
 	return doc, nil
+}
+
+func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
+	out := make([]Statement, 0, len(stmts))
+
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case Directive:
+			if strings.EqualFold(s.Name, "Include") || strings.EqualFold(s.Name, "IncludeOptional") {
+				included, err := resolveIncludeDirective(s, baseDir, cfg, state)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, included...)
+				continue
+			}
+			out = append(out, s)
+		case *Block:
+			children, err := resolveIncludeStatements(s.Children, baseDir, cfg, state)
+			if err != nil {
+				return nil, err
+			}
+			s.Children = children
+			out = append(out, s)
+		default:
+			out = append(out, stmt)
+		}
+	}
+
+	return out, nil
+}
+
+func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
+	if len(d.Args) == 0 {
+		return nil, fmt.Errorf("directive %s requires at least one path", d.Name)
+	}
+
+	isOptional := strings.EqualFold(d.Name, "IncludeOptional")
+	out := make([]Statement, 0)
+
+	for _, rawPattern := range d.Args {
+		pattern := rawPattern
+		if !filepath.IsAbs(pattern) {
+			pattern = filepath.Join(baseDir, pattern)
+		}
+
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("resolve include pattern %q: %w", rawPattern, err)
+		}
+
+		if len(matches) == 0 {
+			if isOptional {
+				continue
+			}
+			return nil, fmt.Errorf("include path not found for pattern %q", rawPattern)
+		}
+
+		for _, match := range matches {
+			doc, err := parseIncludedFile(match, cfg, state)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, doc.Statements...)
+		}
+	}
+
+	return out, nil
+}
+
+func parseIncludedFile(path string, cfg parseOptions, state *includeState) (*Document, error) {
+	canonical, err := canonicalPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, exists := state.inProgress[canonical]; exists {
+		return nil, fmt.Errorf("circular include detected: %s", canonical)
+	}
+
+	state.inProgress[canonical] = struct{}{}
+	defer delete(state.inProgress, canonical)
+
+	f, err := os.Open(canonical)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	baseDir := filepath.Dir(canonical)
+	if cfg.basePath != "" {
+		baseDir, err = canonicalPath(cfg.basePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return parseReaderWithContext(f, baseDir, cfg, state)
+}
+
+func canonicalPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		return resolved, nil
+	}
+
+	if os.IsNotExist(err) {
+		return abs, nil
+	}
+
+	return "", err
 }
 
 type logicalLine struct {
