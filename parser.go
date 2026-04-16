@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode"
 )
@@ -214,7 +213,6 @@ func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, stat
 			return nil, fmt.Errorf("include path not found for pattern %q", rawPattern)
 		}
 
-		sort.Strings(matches)
 		for _, match := range matches {
 			doc, err := parseIncludedFile(match, cfg, state)
 			if err != nil {
