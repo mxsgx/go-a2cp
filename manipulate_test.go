@@ -240,3 +240,26 @@ func TestRenderEscapesCommentNewlines(t *testing.T) {
 		t.Fatalf("rendered output missing escaped CRLF inline comment:\n%s", rendered)
 	}
 }
+
+func TestAddCommentInlineOptionReplacesExistingInlineComment(t *testing.T) {
+	doc := NewDocument()
+	doc.AddDirective("Listen", "8080")
+
+	if err := doc.AddComment("first", WithInlineComment()); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+	if err := doc.AddComment("second", WithInlineComment()); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "Listen 8080 # second") {
+		t.Fatalf("rendered output missing replaced inline comment:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "# first") {
+		t.Fatalf("rendered output still contains old inline comment:\n%s", rendered)
+	}
+	if strings.Count(rendered, "#") != 1 {
+		t.Fatalf("rendered output has duplicate inline comments:\n%s", rendered)
+	}
+}

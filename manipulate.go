@@ -248,15 +248,22 @@ func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
 
 	comment := Comment{Text: text, Pos: Position{Line: line, Column: 1}}
 	insertAt := idx + 1
+	firstInlineComment := -1
 	for insertAt < len(*stmts) {
 		switch s := (*stmts)[insertAt].(type) {
 		case Comment:
 			if s.Pos.Line != line {
 				goto insert
 			}
+			if firstInlineComment < 0 {
+				firstInlineComment = insertAt
+			}
 		case *Comment:
 			if s.Pos.Line != line {
 				goto insert
+			}
+			if firstInlineComment < 0 {
+				firstInlineComment = insertAt
 			}
 		default:
 			goto insert
@@ -265,8 +272,26 @@ func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
 	}
 
 insert:
+	if firstInlineComment >= 0 {
+		replaceCommentText(stmts, firstInlineComment, text)
+		if insertAt-firstInlineComment > 1 {
+			*stmts = append((*stmts)[:firstInlineComment+1], (*stmts)[insertAt:]...)
+		}
+		return nil
+	}
+
 	*stmts = append((*stmts)[:insertAt], append([]Statement{comment}, (*stmts)[insertAt:]...)...)
 	return nil
+}
+
+func replaceCommentText(stmts *[]Statement, index int, text string) {
+	switch c := (*stmts)[index].(type) {
+	case Comment:
+		c.Text = text
+		(*stmts)[index] = c
+	case *Comment:
+		c.Text = text
+	}
 }
 
 func normalizeCommentText(text string, raw bool) string {
