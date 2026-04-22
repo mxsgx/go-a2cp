@@ -16,13 +16,21 @@ Listen 80   # inline comment
 		t.Fatalf("ParseString() error = %v", err)
 	}
 
-	if got := len(doc.Statements); got != 2 {
-		t.Fatalf("statements = %d, want 2", got)
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
 	}
 
-	d0, ok := doc.Statements[0].(Directive)
+	c0, ok := doc.Statements[0].(Comment)
 	if !ok {
-		t.Fatalf("statement[0] not Directive")
+		t.Fatalf("statement[0] not Comment")
+	}
+	if c0.Text != " global comment" {
+		t.Fatalf("comment text = %q, want %q", c0.Text, " global comment")
+	}
+
+	d0, ok := doc.Statements[1].(Directive)
+	if !ok {
+		t.Fatalf("statement[1] not Directive")
 	}
 	if d0.Name != "ServerRoot" {
 		t.Fatalf("directive name = %q, want %q", d0.Name, "ServerRoot")
@@ -31,12 +39,20 @@ Listen 80   # inline comment
 		t.Fatalf("directive args = %#v", d0.Args)
 	}
 
-	d1, ok := doc.Statements[1].(Directive)
+	d1, ok := doc.Statements[2].(Directive)
 	if !ok {
-		t.Fatalf("statement[1] not Directive")
+		t.Fatalf("statement[2] not Directive")
 	}
 	if d1.Name != "Listen" || len(d1.Args) != 1 || d1.Args[0] != "80" {
 		t.Fatalf("directive mismatch: %#v", d1)
+	}
+
+	c1, ok := doc.Statements[3].(Comment)
+	if !ok {
+		t.Fatalf("statement[3] not Comment")
+	}
+	if c1.Text != " inline comment" {
+		t.Fatalf("comment text = %q, want %q", c1.Text, " inline comment")
 	}
 }
 
@@ -81,6 +97,55 @@ func TestParseNestedBlocks(t *testing.T) {
 	}
 }
 
+func TestParseClosingTagTrailingCommentRoundTrip(t *testing.T) {
+	src := `
+<VirtualHost *:80>
+    <Directory "/var/www/html">
+        Require all granted
+    </Directory> # end
+</VirtualHost>
+`
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 1 {
+		t.Fatalf("top-level statements = %d, want 1", got)
+	}
+
+	vh, ok := doc.Statements[0].(*Block)
+	if !ok {
+		t.Fatalf("statement[0] not *Block")
+	}
+	if got := len(vh.Children); got != 1 {
+		t.Fatalf("VirtualHost children = %d, want 1", got)
+	}
+
+	dir, ok := vh.Children[0].(*Block)
+	if !ok {
+		t.Fatalf("VirtualHost child[0] not *Block")
+	}
+	if dir.EndComment != " end" {
+		t.Fatalf("EndComment = %q, want %q", dir.EndComment, " end")
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "    </Directory> # end") {
+		t.Fatalf("rendered output missing inline closing-tag comment:\n%s", rendered)
+	}
+
+	parsed, err := ParseString(rendered)
+	if err != nil {
+		t.Fatalf("ParseString(rendered) error = %v", err)
+	}
+	parsedVH := parsed.Statements[0].(*Block)
+	parsedDir := parsedVH.Children[0].(*Block)
+	if parsedDir.EndComment != " end" {
+		t.Fatalf("round-tripped EndComment = %q, want %q", parsedDir.EndComment, " end")
+	}
+}
+
 func TestParseLineContinuation(t *testing.T) {
 	src := "LogFormat \"%h %l \\\n%u %t\" common\n"
 	doc, err := ParseString(src)
@@ -100,6 +165,76 @@ func TestParseLineContinuation(t *testing.T) {
 	}
 	if len(d.Args) != 2 || d.Args[1] != "common" {
 		t.Fatalf("directive args = %#v", d.Args)
+	}
+	if d.Args[0] != "%h %l %u %t" {
+		t.Fatalf("directive format arg = %q, want %q", d.Args[0], "%h %l %u %t")
+	}
+}
+
+func TestParseLineContinuationPreservesContinuationLineComment(t *testing.T) {
+	src := `CustomLog logs/access_log \ # carried comment
+combined
+`
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 2 {
+		t.Fatalf("statements = %d, want 2", got)
+	}
+
+	c, ok := doc.Statements[0].(Comment)
+	if !ok {
+		t.Fatalf("statement[0] not Comment")
+	}
+	if c.Text != " carried comment" {
+		t.Fatalf("comment text = %q, want %q", c.Text, " carried comment")
+	}
+
+	d, ok := doc.Statements[1].(Directive)
+	if !ok {
+		t.Fatalf("statement[1] not Directive")
+	}
+	if d.Name != "CustomLog" {
+		t.Fatalf("directive name = %q, want CustomLog", d.Name)
+	}
+	if len(d.Args) != 2 || d.Args[0] != "logs/access_log" || d.Args[1] != "combined" {
+		t.Fatalf("directive args = %#v", d.Args)
+	}
+}
+
+func TestParseLineContinuationWithQuotedValueKeepsInlineComment(t *testing.T) {
+	src := "LogFormat \"%h %l \\\n%u %t\" common # format comment\n"
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 2 {
+		t.Fatalf("statements = %d, want 2", got)
+	}
+
+	d, ok := doc.Statements[0].(Directive)
+	if !ok {
+		t.Fatalf("statement[0] not Directive")
+	}
+	if d.Name != "LogFormat" {
+		t.Fatalf("directive name = %q, want LogFormat", d.Name)
+	}
+	if len(d.Args) != 2 || d.Args[1] != "common" {
+		t.Fatalf("directive args = %#v", d.Args)
+	}
+	if d.Args[0] != "%h %l %u %t" {
+		t.Fatalf("directive format arg = %q, want %q", d.Args[0], "%h %l %u %t")
+	}
+
+	c, ok := doc.Statements[1].(Comment)
+	if !ok {
+		t.Fatalf("statement[1] not Comment")
+	}
+	if c.Text != " format comment" {
+		t.Fatalf("comment text = %q, want %q", c.Text, " format comment")
 	}
 }
 
@@ -124,18 +259,23 @@ func TestParseFileFixture(t *testing.T) {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
 
-	if got := len(doc.Statements); got != 3 {
-		t.Fatalf("statements = %d, want 3", got)
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
 	}
 
-	root, ok := doc.Statements[0].(Directive)
-	if !ok || root.Name != "ServerRoot" {
+	comment, ok := doc.Statements[0].(Comment)
+	if !ok || comment.Text != " basic parser fixture" {
 		t.Fatalf("statement[0] mismatch: %#v", doc.Statements[0])
 	}
 
-	directory, ok := doc.Statements[2].(*Block)
+	root, ok := doc.Statements[1].(Directive)
+	if !ok || root.Name != "ServerRoot" {
+		t.Fatalf("statement[1] mismatch: %#v", doc.Statements[1])
+	}
+
+	directory, ok := doc.Statements[3].(*Block)
 	if !ok || directory.Name != "Directory" {
-		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+		t.Fatalf("statement[3] mismatch: %#v", doc.Statements[3])
 	}
 	if len(directory.Children) != 1 {
 		t.Fatalf("Directory children = %d, want 1", len(directory.Children))
@@ -166,6 +306,76 @@ func TestParseFileWithIncludeResolutionHappyPath(t *testing.T) {
 
 	if d, ok := doc.Statements[3].(Directive); !ok || d.Name != "Listen" || len(d.Args) != 1 || d.Args[0] != "80" {
 		t.Fatalf("statement[3] mismatch: %#v", doc.Statements[3])
+	}
+}
+
+func TestParseFileWithIncludeResolutionConsumesInlineIncludeComment(t *testing.T) {
+	doc, err := ParseFile(
+		"testdata/parser/include-inline-comment/main.conf",
+		WithIncludeResolution("testdata/parser/include-inline-comment"),
+	)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
+	}
+
+	if d, ok := doc.Statements[0].(Directive); !ok || d.Name != "ServerRoot" {
+		t.Fatalf("statement[0] mismatch: %#v", doc.Statements[0])
+	}
+
+	if c, ok := doc.Statements[1].(Comment); !ok || c.Text != " include user settings" {
+		t.Fatalf("statement[1] mismatch: %#v", doc.Statements[1])
+	}
+
+	if d, ok := doc.Statements[2].(Directive); !ok || d.Name != "User" || len(d.Args) != 1 || d.Args[0] != "www-data" {
+		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+	}
+
+	if d, ok := doc.Statements[3].(Directive); !ok || d.Name != "Listen" || len(d.Args) != 1 || d.Args[0] != "80" {
+		t.Fatalf("statement[3] mismatch: %#v", doc.Statements[3])
+	}
+}
+
+func TestParseFileWithIncludeResolutionAssignsUniqueLineNumbers(t *testing.T) {
+	doc, err := ParseFile(
+		"testdata/parser/include-line-offset/main.conf",
+		WithIncludeResolution("testdata/parser/include-line-offset"),
+	)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
+	}
+
+	seen := make(map[int]string)
+	for i, stmt := range doc.Statements {
+		switch s := stmt.(type) {
+		case Directive:
+			if prev, ok := seen[s.Pos.Line]; ok {
+				t.Fatalf("duplicate line %d between statement[%d] and %s", s.Pos.Line, i, prev)
+			}
+			seen[s.Pos.Line] = s.Name
+		case Comment:
+			if prev, ok := seen[s.Pos.Line]; ok {
+				t.Fatalf("duplicate line %d between statement[%d] and %s", s.Pos.Line, i, prev)
+			}
+			seen[s.Pos.Line] = "Comment"
+		default:
+			t.Fatalf("unexpected statement type at %d: %#v", i, stmt)
+		}
+	}
+
+	rendered := doc.String()
+	if strings.Contains(rendered, "ServerRoot \"/etc/apache2\" # included comment") {
+		t.Fatalf("rendered output incorrectly inlined included comment with root statement:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "# included comment") {
+		t.Fatalf("rendered output missing included comment line:\n%s", rendered)
 	}
 }
 

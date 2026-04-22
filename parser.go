@@ -94,6 +94,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 	for _, ll := range logicalLines {
 		trimmed := strings.TrimSpace(ll.Text)
 		if trimmed == "" {
+			if ll.HasComment {
+				appendStmt(Comment{
+					Text: ll.Comment,
+					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+				})
+			}
 			continue
 		}
 
@@ -105,6 +111,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 
 			b := &Block{Name: name, Args: args, Pos: Position{Line: ll.Line, Column: ll.Column}}
 			appendStmt(b)
+			if ll.HasComment {
+				appendStmt(Comment{
+					Text: ll.Comment,
+					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+				})
+			}
 			stack = append(stack, b)
 			continue
 		}
@@ -123,6 +135,9 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 				return nil, &ParseError{Line: ll.Line, Column: ll.Column, Message: fmt.Sprintf("mismatched closing tag </%s>, expected </%s>", name, top.Name)}
 			}
 			top.EndPos = Position{Line: ll.Line, Column: ll.Column}
+			if ll.HasComment {
+				top.EndComment = ll.Comment
+			}
 			stack = stack[:len(stack)-1]
 			continue
 		}
@@ -139,6 +154,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 			Args: fields[1:],
 			Pos:  Position{Line: ll.Line, Column: ll.Column},
 		})
+		if ll.HasComment {
+			appendStmt(Comment{
+				Text: ll.Comment,
+				Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+			})
+		}
 	}
 
 	if len(stack) > 0 {
@@ -159,16 +180,48 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 
 func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
 	out := make([]Statement, 0, len(stmts))
+	nextLine := maxStatementLine(stmts) + 1
 
-	for _, stmt := range stmts {
+	for i := 0; i < len(stmts); i++ {
+		stmt := stmts[i]
 		switch s := stmt.(type) {
 		case Directive:
 			if strings.EqualFold(s.Name, "Include") || strings.EqualFold(s.Name, "IncludeOptional") {
+				inlineComment, consumed := consumeInlineCommentAfter(stmts, i, s.Pos.Line)
+				if consumed {
+					i++
+				}
+
 				included, err := resolveIncludeDirective(s, baseDir, cfg, state)
 				if err != nil {
 					return nil, err
 				}
-				out = append(out, included...)
+				if inlineComment != nil {
+					out = append(out, *inlineComment)
+				}
+				prepared, advancedNextLine := offsetStatementsToNextLine(included, nextLine)
+				nextLine = advancedNextLine
+				out = append(out, prepared...)
+				continue
+			}
+			out = append(out, s)
+		case *Directive:
+			if strings.EqualFold(s.Name, "Include") || strings.EqualFold(s.Name, "IncludeOptional") {
+				inlineComment, consumed := consumeInlineCommentAfter(stmts, i, s.Pos.Line)
+				if consumed {
+					i++
+				}
+
+				included, err := resolveIncludeDirective(*s, baseDir, cfg, state)
+				if err != nil {
+					return nil, err
+				}
+				if inlineComment != nil {
+					out = append(out, *inlineComment)
+				}
+				prepared, advancedNextLine := offsetStatementsToNextLine(included, nextLine)
+				nextLine = advancedNextLine
+				out = append(out, prepared...)
 				continue
 			}
 			out = append(out, s)
@@ -185,6 +238,28 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 	}
 
 	return out, nil
+}
+
+func consumeInlineCommentAfter(stmts []Statement, includeIdx int, includeLine int) (*Comment, bool) {
+	nextIdx := includeIdx + 1
+	if nextIdx >= len(stmts) {
+		return nil, false
+	}
+
+	switch c := stmts[nextIdx].(type) {
+	case Comment:
+		if includeLine > 0 && c.Pos.Line == includeLine {
+			cloned := c
+			return &cloned, true
+		}
+	case *Comment:
+		if includeLine > 0 && c.Pos.Line == includeLine {
+			cloned := *c
+			return &cloned, true
+		}
+	}
+
+	return nil, false
 }
 
 func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
@@ -223,6 +298,166 @@ func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, stat
 	}
 
 	return out, nil
+}
+
+func offsetStatementsToNextLine(stmts []Statement, nextLine int) ([]Statement, int) {
+	if len(stmts) == 0 {
+		return nil, nextLine
+	}
+
+	minLine, ok := minStatementLine(stmts)
+	if !ok {
+		cloned := cloneStatements(stmts)
+		return cloned, nextLine
+	}
+
+	maxLine := maxStatementLine(stmts)
+	offset := nextLine - minLine
+	cloned := cloneStatements(stmts)
+	if offset != 0 {
+		shiftStatementLines(cloned, offset)
+	}
+	return cloned, nextLine + (maxLine - minLine + 1)
+}
+
+func cloneStatements(stmts []Statement) []Statement {
+	cloned := make([]Statement, len(stmts))
+	for i, stmt := range stmts {
+		cloned[i] = cloneStatement(stmt)
+	}
+	return cloned
+}
+
+func cloneStatement(stmt Statement) Statement {
+	switch s := stmt.(type) {
+	case Directive:
+		return s
+	case *Directive:
+		cloned := *s
+		return &cloned
+	case Comment:
+		return s
+	case *Comment:
+		cloned := *s
+		return &cloned
+	case *Block:
+		cloned := *s
+		cloned.Children = cloneStatements(s.Children)
+		return &cloned
+	default:
+		return stmt
+	}
+}
+
+func shiftStatementLines(stmts []Statement, offset int) {
+	for i, stmt := range stmts {
+		switch s := stmt.(type) {
+		case Directive:
+			s.Pos.Line += offset
+			stmts[i] = s
+		case *Directive:
+			s.Pos.Line += offset
+		case Comment:
+			s.Pos.Line += offset
+			stmts[i] = s
+		case *Comment:
+			s.Pos.Line += offset
+		case *Block:
+			s.Pos.Line += offset
+			s.EndPos.Line += offset
+			shiftStatementLines(s.Children, offset)
+		}
+	}
+}
+
+func minStatementLine(stmts []Statement) (int, bool) {
+	minLine := 0
+	found := false
+	for _, stmt := range stmts {
+		if line, ok := statementMinLine(stmt); ok {
+			if !found || line < minLine {
+				minLine = line
+				found = true
+			}
+		}
+	}
+	return minLine, found
+}
+
+func statementMinLine(stmt Statement) (int, bool) {
+	switch s := stmt.(type) {
+	case Directive:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Directive:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case Comment:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Comment:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Block:
+		candidate := 0
+		found := false
+		if s.Pos.Line > 0 {
+			candidate = s.Pos.Line
+			found = true
+		}
+		if s.EndPos.Line > 0 && (!found || s.EndPos.Line < candidate) {
+			candidate = s.EndPos.Line
+			found = true
+		}
+		if childLine, ok := minStatementLine(s.Children); ok {
+			if !found || childLine < candidate {
+				candidate = childLine
+				found = true
+			}
+		}
+		if found {
+			return candidate, true
+		}
+	}
+	return 0, false
+}
+
+func maxStatementLine(stmts []Statement) int {
+	maxLine := 0
+	for _, stmt := range stmts {
+		if line := statementMaxLine(stmt); line > maxLine {
+			maxLine = line
+		}
+	}
+	return maxLine
+}
+
+func statementMaxLine(stmt Statement) int {
+	switch s := stmt.(type) {
+	case Directive:
+		return s.Pos.Line
+	case *Directive:
+		return s.Pos.Line
+	case Comment:
+		return s.Pos.Line
+	case *Comment:
+		return s.Pos.Line
+	case *Block:
+		maxLine := s.Pos.Line
+		if s.EndPos.Line > maxLine {
+			maxLine = s.EndPos.Line
+		}
+		if childMax := maxStatementLine(s.Children); childMax > maxLine {
+			maxLine = childMax
+		}
+		return maxLine
+	default:
+		return 0
+	}
 }
 
 func parseIncludedFile(path string, cfg parseOptions, state *includeState) (*Document, error) {
@@ -273,9 +508,12 @@ func canonicalPath(path string) (string, error) {
 }
 
 type logicalLine struct {
-	Text   string
-	Line   int
-	Column int
+	Text          string
+	Comment       string
+	HasComment    bool
+	CommentColumn int
+	Line          int
+	Column        int
 }
 
 func readLogicalLines(r io.Reader) ([]logicalLine, error) {
@@ -285,12 +523,14 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 
 	var current strings.Builder
 	currentStartLine := 0
+	inSingle := false
+	inDouble := false
 
 	for scanner.Scan() {
 		physicalLine++
 		line := scanner.Text()
 
-		lineNoComment := stripComments(line)
+		lineNoComment, comment, commentColumn, hasComment, nextSingle, nextDouble := splitCodeAndComment(line, inSingle, inDouble)
 		lineNoComment = strings.TrimRightFunc(lineNoComment, unicode.IsSpace)
 
 		if current.Len() == 0 {
@@ -298,18 +538,43 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 		}
 
 		if endsWithUnescapedBackslash(lineNoComment) {
-			current.WriteString(strings.TrimSuffix(lineNoComment, "\\"))
+			if hasComment {
+				out = append(out, logicalLine{
+					Text:          "",
+					Comment:       comment,
+					HasComment:    true,
+					CommentColumn: commentColumn,
+					Line:          physicalLine,
+					Column:        1,
+				})
+			}
+			fragment := strings.TrimRightFunc(strings.TrimSuffix(lineNoComment, "\\"), unicode.IsSpace)
+			if current.Len() > 0 {
+				fragment = strings.TrimLeftFunc(fragment, unicode.IsSpace)
+			}
+			current.WriteString(fragment)
 			current.WriteString(" ")
+			inSingle = nextSingle
+			inDouble = nextDouble
 			continue
 		}
 
-		current.WriteString(lineNoComment)
+		fragment := lineNoComment
+		if current.Len() > 0 {
+			fragment = strings.TrimLeftFunc(fragment, unicode.IsSpace)
+		}
+		current.WriteString(fragment)
 		out = append(out, logicalLine{
-			Text:   current.String(),
-			Line:   currentStartLine,
-			Column: 1,
+			Text:          current.String(),
+			Comment:       comment,
+			HasComment:    hasComment,
+			CommentColumn: commentColumn,
+			Line:          currentStartLine,
+			Column:        1,
 		})
 		current.Reset()
+		inSingle = nextSingle
+		inDouble = nextDouble
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -327,13 +592,14 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 	return out, nil
 }
 
-func stripComments(line string) string {
+func splitCodeAndComment(line string, inSingle, inDouble bool) (string, string, int, bool, bool, bool) {
 	var out strings.Builder
-	inSingle := false
-	inDouble := false
 	escaped := false
+	column := 0
 
-	for _, r := range line {
+	for i, r := range line {
+		column++
+
 		if escaped {
 			out.WriteRune(r)
 			escaped = false
@@ -359,13 +625,14 @@ func stripComments(line string) string {
 		}
 
 		if r == '#' && !inSingle && !inDouble {
-			break
+			comment := strings.TrimRightFunc(line[i+1:], unicode.IsSpace)
+			return out.String(), comment, column, true, inSingle, inDouble
 		}
 
 		out.WriteRune(r)
 	}
 
-	return out.String()
+	return out.String(), "", 0, false, inSingle, inDouble
 }
 
 func endsWithUnescapedBackslash(s string) bool {

@@ -13,7 +13,14 @@ func main() {
 
 	vh := doc.AddBlock("VirtualHost", "*:8080")
 	vh.AddDirective("ServerName", "scratch.local")
+
+	if err := vh.AddComment(" You can change DocumentRoot below"); err != nil {
+		log.Fatal(err)
+	}
 	vh.AddDirective("DocumentRoot", "/var/www/scratch")
+	if err := vh.AddComment(" change the /var/www/scratch path", a2cp.WithInlineComment()); err != nil {
+		log.Fatal(err)
+	}
 
 	dir := vh.AddBlock("Directory", "/var/www/scratch")
 	dir.AddDirective("Require", "all", "granted")

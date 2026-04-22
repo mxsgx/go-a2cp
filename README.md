@@ -7,9 +7,10 @@
 - Parses directives (for example `Listen 80`)
 - Parses nested block directives (for example `<VirtualHost *:80> ... </VirtualHost>`)
 - Handles `#` comments (including inline comments)
+- Preserves trailing comments on closing tags (for example `</Directory> # end`)
 - Supports quoted arguments (`"..."` and `'...'`)
 - Supports line continuation using trailing `\\`
-- Optional recursive include resolution for `Include` and `IncludeOptional`
+- Optional recursive include resolution for `Include` and `IncludeOptional` with unique line ranges per included file
 - Supports AST manipulation (append/insert/remove/find)
 - Supports creating configs from scratch (builder-style API)
 - Renders and writes modified config back to file
@@ -69,17 +70,29 @@ func main() {
 - `NewDocument() *Document`
 - `NewDirective(name string, args ...string) Directive`
 - `NewBlock(name string, args ...string) *Block`
+- `WithInlineComment() CommentOption`
+- `WithRawCommentText() CommentOption`
 - `(*Document).String() string`
 - `(*Document).WriteTo(w io.Writer) (int64, error)`
 - `(*Document).Save(path string) error`
 - `(*Document).SaveWithMode(path string, mode os.FileMode) error`
 - `(*Document).AddDirective(name string, args ...string) *Document`
 - `(*Document).AddBlock(name string, args ...string) *Block`
+- `(*Document).AddComment(text string, opts ...CommentOption) error`
+- `(*Document).AddInlineComment(text string) error` (compatibility alias)
 - `(*Block).AddDirective(name string, args ...string) *Block`
 - `(*Block).AddBlock(name string, args ...string) *Block`
+- `(*Block).AddComment(text string, opts ...CommentOption) error`
+- `(*Block).AddInlineComment(text string) error` (compatibility alias)
+
+`AddComment` normalizes non-empty text by default so rendered comments use `# ` prefix.
+Comment text is rendered safely: newline characters are escaped as `\\n`/`\\r` to avoid multi-line injection.
+Use `WithRawCommentText()` to preserve leading whitespace verbatim.
+
 - AST nodes:
+  - `Comment`
   - `Directive`
-  - `Block`
+  - `Block` (includes `EndComment` for closing-tag trailing comments)
   - `Document`
   - `Position`
 
@@ -105,6 +118,8 @@ Runnable examples are available in `examples/`:
 - `examples/parse-file`: parse a `.conf` file from disk
 - `examples/include-resolution`: parse config with recursive `Include` expansion
 - `examples/include-optional-skip`: parse config with missing `IncludeOptional` target (skipped)
+- `examples/comment-roundtrip`: parse and render config while preserving comments
+- `examples/backslash-comments`: parse continuation lines using trailing `\` and preserve comments
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -115,6 +130,8 @@ go run ./examples/parse-string
 go run ./examples/parse-file
 go run ./examples/include-resolution
 go run ./examples/include-optional-skip
+go run ./examples/comment-roundtrip
+go run ./examples/backslash-comments
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```
