@@ -97,7 +97,12 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText s
 		b.WriteString(indent)
 		b.WriteString("</")
 		b.WriteString(s.Name)
-		b.WriteString(">\n")
+		b.WriteString(">")
+		if s.EndComment != "" {
+			b.WriteString(" #")
+			b.WriteString(s.EndComment)
+		}
+		b.WriteString("\n")
 	}
 }
 

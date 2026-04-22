@@ -7,6 +7,7 @@
 - Parses directives (for example `Listen 80`)
 - Parses nested block directives (for example `<VirtualHost *:80> ... </VirtualHost>`)
 - Handles `#` comments (including inline comments)
+- Preserves trailing comments on closing tags (for example `</Directory> # end`)
 - Supports quoted arguments (`"..."` and `'...'`)
 - Supports line continuation using trailing `\\`
 - Optional recursive include resolution for `Include` and `IncludeOptional`
@@ -87,11 +88,11 @@ func main() {
 `AddComment` normalizes non-empty text by default so rendered comments use `# ` prefix.
 Use `WithRawCommentText()` to preserve leading whitespace verbatim.
 - AST nodes:
-  - `Comment`
-  - `Directive`
-  - `Block`
-  - `Document`
-  - `Position`
+	- `Comment`
+	- `Directive`
+	- `Block` (includes `EndComment` for closing-tag trailing comments)
+	- `Document`
+	- `Position`
 
 ## Testing
 

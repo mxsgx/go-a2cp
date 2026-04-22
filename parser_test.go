@@ -97,6 +97,55 @@ func TestParseNestedBlocks(t *testing.T) {
 	}
 }
 
+func TestParseClosingTagTrailingCommentRoundTrip(t *testing.T) {
+	src := `
+<VirtualHost *:80>
+    <Directory "/var/www/html">
+        Require all granted
+    </Directory> # end
+</VirtualHost>
+`
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 1 {
+		t.Fatalf("top-level statements = %d, want 1", got)
+	}
+
+	vh, ok := doc.Statements[0].(*Block)
+	if !ok {
+		t.Fatalf("statement[0] not *Block")
+	}
+	if got := len(vh.Children); got != 1 {
+		t.Fatalf("VirtualHost children = %d, want 1", got)
+	}
+
+	dir, ok := vh.Children[0].(*Block)
+	if !ok {
+		t.Fatalf("VirtualHost child[0] not *Block")
+	}
+	if dir.EndComment != " end" {
+		t.Fatalf("EndComment = %q, want %q", dir.EndComment, " end")
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "    </Directory> # end") {
+		t.Fatalf("rendered output missing inline closing-tag comment:\n%s", rendered)
+	}
+
+	parsed, err := ParseString(rendered)
+	if err != nil {
+		t.Fatalf("ParseString(rendered) error = %v", err)
+	}
+	parsedVH := parsed.Statements[0].(*Block)
+	parsedDir := parsedVH.Children[0].(*Block)
+	if parsedDir.EndComment != " end" {
+		t.Fatalf("round-tripped EndComment = %q, want %q", parsedDir.EndComment, " end")
+	}
+}
+
 func TestParseLineContinuation(t *testing.T) {
 	src := "LogFormat \"%h %l \\\n%u %t\" common\n"
 	doc, err := ParseString(src)

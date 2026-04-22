@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Helper APIs `(*Document).AddComment(text string, opts ...CommentOption) error` and `(*Block).AddComment(text string, opts ...CommentOption) error`.
 - Inline comment option `WithInlineComment()`.
 - Raw text option `WithRawCommentText()` for verbatim comment spacing.
+- Trailing comments on closing tags are now preserved inline via `Block.EndComment`.
 
 ### Changed
 - Parser now preserves full-line and inline comments as `Comment` statements.
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Parser now keeps quote state across continued physical lines so `#` after a closed quote is parsed as a comment.
 - Continuation line joining now normalizes whitespace to avoid doubled spaces in rendered output.
 - Renderer now writes `Comment` statements back and keeps inline comments on the same line.
+- Renderer now keeps closing-tag comments on the same line as `</...>`.
 - `AddComment` now normalizes non-empty text to render with `# ` by default.
 - `AddInlineComment` remains available as a compatibility alias for `AddComment(text, WithInlineComment())`.
 

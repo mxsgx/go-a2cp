@@ -136,10 +136,7 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 			}
 			top.EndPos = Position{Line: ll.Line, Column: ll.Column}
 			if ll.HasComment {
-				appendStmt(Comment{
-					Text: ll.Comment,
-					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
-				})
+				top.EndComment = ll.Comment
 			}
 			stack = stack[:len(stack)-1]
 			continue
