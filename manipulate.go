@@ -248,6 +248,23 @@ func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
 
 	comment := Comment{Text: text, Pos: Position{Line: line, Column: 1}}
 	insertAt := idx + 1
+	for insertAt < len(*stmts) {
+		switch s := (*stmts)[insertAt].(type) {
+		case Comment:
+			if s.Pos.Line != line {
+				goto insert
+			}
+		case *Comment:
+			if s.Pos.Line != line {
+				goto insert
+			}
+		default:
+			goto insert
+		}
+		insertAt++
+	}
+
+insert:
 	*stmts = append((*stmts)[:insertAt], append([]Statement{comment}, (*stmts)[insertAt:]...)...)
 	return nil
 }

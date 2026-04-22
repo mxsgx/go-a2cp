@@ -309,13 +309,14 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 
 	var current strings.Builder
 	currentStartLine := 0
+	inSingle := false
+	inDouble := false
 
 	for scanner.Scan() {
 		physicalLine++
 		line := scanner.Text()
 
-		inSingle, inDouble := quoteStateForContinuation(current.String())
-		lineNoComment, comment, commentColumn, hasComment := splitCodeAndComment(line, inSingle, inDouble)
+		lineNoComment, comment, commentColumn, hasComment, nextSingle, nextDouble := splitCodeAndComment(line, inSingle, inDouble)
 		lineNoComment = strings.TrimRightFunc(lineNoComment, unicode.IsSpace)
 
 		if current.Len() == 0 {
@@ -339,6 +340,8 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 			}
 			current.WriteString(fragment)
 			current.WriteString(" ")
+			inSingle = nextSingle
+			inDouble = nextDouble
 			continue
 		}
 
@@ -356,6 +359,8 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 			Column:        1,
 		})
 		current.Reset()
+		inSingle = nextSingle
+		inDouble = nextDouble
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -373,37 +378,7 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 	return out, nil
 }
 
-func quoteStateForContinuation(s string) (bool, bool) {
-	inSingle := false
-	inDouble := false
-	escaped := false
-
-	for _, r := range s {
-		if escaped {
-			escaped = false
-			continue
-		}
-
-		if r == '\\' {
-			escaped = true
-			continue
-		}
-
-		if r == '\'' && !inDouble {
-			inSingle = !inSingle
-			continue
-		}
-
-		if r == '"' && !inSingle {
-			inDouble = !inDouble
-			continue
-		}
-	}
-
-	return inSingle, inDouble
-}
-
-func splitCodeAndComment(line string, inSingle, inDouble bool) (string, string, int, bool) {
+func splitCodeAndComment(line string, inSingle, inDouble bool) (string, string, int, bool, bool, bool) {
 	var out strings.Builder
 	escaped := false
 	column := 0
@@ -437,13 +412,13 @@ func splitCodeAndComment(line string, inSingle, inDouble bool) (string, string, 
 
 		if r == '#' && !inSingle && !inDouble {
 			comment := strings.TrimRightFunc(line[i+1:], unicode.IsSpace)
-			return out.String(), comment, column, true
+			return out.String(), comment, column, true, inSingle, inDouble
 		}
 
 		out.WriteRune(r)
 	}
 
-	return out.String(), "", 0, false
+	return out.String(), "", 0, false, inSingle, inDouble
 }
 
 func endsWithUnescapedBackslash(s string) bool {
