@@ -117,6 +117,76 @@ func TestParseLineContinuation(t *testing.T) {
 	if len(d.Args) != 2 || d.Args[1] != "common" {
 		t.Fatalf("directive args = %#v", d.Args)
 	}
+	if d.Args[0] != "%h %l %u %t" {
+		t.Fatalf("directive format arg = %q, want %q", d.Args[0], "%h %l %u %t")
+	}
+}
+
+func TestParseLineContinuationPreservesContinuationLineComment(t *testing.T) {
+	src := `CustomLog logs/access_log \ # carried comment
+combined
+`
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 2 {
+		t.Fatalf("statements = %d, want 2", got)
+	}
+
+	c, ok := doc.Statements[0].(Comment)
+	if !ok {
+		t.Fatalf("statement[0] not Comment")
+	}
+	if c.Text != " carried comment" {
+		t.Fatalf("comment text = %q, want %q", c.Text, " carried comment")
+	}
+
+	d, ok := doc.Statements[1].(Directive)
+	if !ok {
+		t.Fatalf("statement[1] not Directive")
+	}
+	if d.Name != "CustomLog" {
+		t.Fatalf("directive name = %q, want CustomLog", d.Name)
+	}
+	if len(d.Args) != 2 || d.Args[0] != "logs/access_log" || d.Args[1] != "combined" {
+		t.Fatalf("directive args = %#v", d.Args)
+	}
+}
+
+func TestParseLineContinuationWithQuotedValueKeepsInlineComment(t *testing.T) {
+	src := "LogFormat \"%h %l \\\n%u %t\" common # format comment\n"
+	doc, err := ParseString(src)
+	if err != nil {
+		t.Fatalf("ParseString() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 2 {
+		t.Fatalf("statements = %d, want 2", got)
+	}
+
+	d, ok := doc.Statements[0].(Directive)
+	if !ok {
+		t.Fatalf("statement[0] not Directive")
+	}
+	if d.Name != "LogFormat" {
+		t.Fatalf("directive name = %q, want LogFormat", d.Name)
+	}
+	if len(d.Args) != 2 || d.Args[1] != "common" {
+		t.Fatalf("directive args = %#v", d.Args)
+	}
+	if d.Args[0] != "%h %l %u %t" {
+		t.Fatalf("directive format arg = %q, want %q", d.Args[0], "%h %l %u %t")
+	}
+
+	c, ok := doc.Statements[1].(Comment)
+	if !ok {
+		t.Fatalf("statement[1] not Comment")
+	}
+	if c.Text != " format comment" {
+		t.Fatalf("comment text = %q, want %q", c.Text, " format comment")
+	}
 }
 
 func TestParseErrors(t *testing.T) {

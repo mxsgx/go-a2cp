@@ -135,13 +135,13 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 				return nil, &ParseError{Line: ll.Line, Column: ll.Column, Message: fmt.Sprintf("mismatched closing tag </%s>, expected </%s>", name, top.Name)}
 			}
 			top.EndPos = Position{Line: ll.Line, Column: ll.Column}
-			stack = stack[:len(stack)-1]
 			if ll.HasComment {
 				appendStmt(Comment{
 					Text: ll.Comment,
 					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
 				})
 			}
+			stack = stack[:len(stack)-1]
 			continue
 		}
 
@@ -317,7 +317,8 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 		physicalLine++
 		line := scanner.Text()
 
-		lineNoComment, comment, commentColumn, hasComment := splitCodeAndComment(line)
+		inSingle, inDouble := quoteStateForContinuation(current.String())
+		lineNoComment, comment, commentColumn, hasComment := splitCodeAndComment(line, inSingle, inDouble)
 		lineNoComment = strings.TrimRightFunc(lineNoComment, unicode.IsSpace)
 
 		if current.Len() == 0 {
@@ -325,12 +326,30 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 		}
 
 		if endsWithUnescapedBackslash(lineNoComment) {
-			current.WriteString(strings.TrimSuffix(lineNoComment, "\\"))
+			if hasComment {
+				out = append(out, logicalLine{
+					Text:          "",
+					Comment:       comment,
+					HasComment:    true,
+					CommentColumn: commentColumn,
+					Line:          physicalLine,
+					Column:        1,
+				})
+			}
+			fragment := strings.TrimRightFunc(strings.TrimSuffix(lineNoComment, "\\"), unicode.IsSpace)
+			if current.Len() > 0 {
+				fragment = strings.TrimLeftFunc(fragment, unicode.IsSpace)
+			}
+			current.WriteString(fragment)
 			current.WriteString(" ")
 			continue
 		}
 
-		current.WriteString(lineNoComment)
+		fragment := lineNoComment
+		if current.Len() > 0 {
+			fragment = strings.TrimLeftFunc(fragment, unicode.IsSpace)
+		}
+		current.WriteString(fragment)
 		out = append(out, logicalLine{
 			Text:          current.String(),
 			Comment:       comment,
@@ -357,10 +376,38 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 	return out, nil
 }
 
-func splitCodeAndComment(line string) (string, string, int, bool) {
-	var out strings.Builder
+func quoteStateForContinuation(s string) (bool, bool) {
 	inSingle := false
 	inDouble := false
+	escaped := false
+
+	for _, r := range s {
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+
+		if r == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+
+		if r == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+	}
+
+	return inSingle, inDouble
+}
+
+func splitCodeAndComment(line string, inSingle, inDouble bool) (string, string, int, bool) {
+	var out strings.Builder
 	escaped := false
 	column := 0
 
@@ -392,7 +439,8 @@ func splitCodeAndComment(line string) (string, string, int, bool) {
 		}
 
 		if r == '#' && !inSingle && !inDouble {
-			return out.String(), line[i+1:], column, true
+			comment := strings.TrimRightFunc(line[i+1:], unicode.IsSpace)
+			return out.String(), comment, column, true
 		}
 
 		out.WriteRune(r)

@@ -70,6 +70,7 @@ func main() {
 - `NewDirective(name string, args ...string) Directive`
 - `NewBlock(name string, args ...string) *Block`
 - `WithInlineComment() CommentOption`
+- `WithRawCommentText() CommentOption`
 - `(*Document).String() string`
 - `(*Document).WriteTo(w io.Writer) (int64, error)`
 - `(*Document).Save(path string) error`
@@ -82,6 +83,9 @@ func main() {
 - `(*Block).AddBlock(name string, args ...string) *Block`
 - `(*Block).AddComment(text string, opts ...CommentOption) error`
 - `(*Block).AddInlineComment(text string) error` (compatibility alias)
+
+`AddComment` normalizes non-empty text by default so rendered comments use `# ` prefix.
+Use `WithRawCommentText()` to preserve leading whitespace verbatim.
 - AST nodes:
   - `Comment`
   - `Directive`
@@ -112,6 +116,7 @@ Runnable examples are available in `examples/`:
 - `examples/include-resolution`: parse config with recursive `Include` expansion
 - `examples/include-optional-skip`: parse config with missing `IncludeOptional` target (skipped)
 - `examples/comment-roundtrip`: parse and render config while preserving comments
+- `examples/backslash-comments`: parse continuation lines using trailing `\` and preserve comments
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -123,6 +128,7 @@ go run ./examples/parse-file
 go run ./examples/include-resolution
 go run ./examples/include-optional-skip
 go run ./examples/comment-roundtrip
+go run ./examples/backslash-comments
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```

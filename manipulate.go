@@ -9,13 +9,22 @@ import (
 type CommentOption func(*commentOptions)
 
 type commentOptions struct {
-	inline bool
+	inline  bool
+	rawText bool
 }
 
 // WithInlineComment marks the comment as inline with the previous non-comment statement.
 func WithInlineComment() CommentOption {
 	return func(cfg *commentOptions) {
 		cfg.inline = true
+	}
+}
+
+// WithRawCommentText preserves comment text verbatim without inserting a leading space.
+// By default, AddComment normalizes non-empty text so rendered comments use `# ` prefix.
+func WithRawCommentText() CommentOption {
+	return func(cfg *commentOptions) {
+		cfg.rawText = true
 	}
 }
 
@@ -46,7 +55,10 @@ func (d *Document) AddDirective(name string, args ...string) *Document {
 }
 
 // AddComment appends a comment to the document root.
-// Use WithInlineComment to render the comment on the same line as the previous statement.
+// By default, non-empty text is normalized to include exactly one leading space after `#`
+// when rendered (for example, text `"app port"` renders as `# app port`).
+// Use WithRawCommentText to preserve text verbatim, and WithInlineComment to render on
+// the same line as the previous statement.
 func (d *Document) AddComment(text string, opts ...CommentOption) error {
 	return addComment(&d.Statements, text, opts...)
 }
@@ -125,7 +137,10 @@ func (b *Block) AddDirective(name string, args ...string) *Block {
 }
 
 // AddComment appends a comment to the block.
-// Use WithInlineComment to render the comment on the same line as the previous statement.
+// By default, non-empty text is normalized to include exactly one leading space after `#`
+// when rendered (for example, text `"app port"` renders as `# app port`).
+// Use WithRawCommentText to preserve text verbatim, and WithInlineComment to render on
+// the same line as the previous statement.
 func (b *Block) AddComment(text string, opts ...CommentOption) error {
 	return addComment(&b.Children, text, opts...)
 }
@@ -211,6 +226,8 @@ func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
 		}
 	}
 
+	text = normalizeCommentText(text, cfg.rawText)
+
 	if !cfg.inline {
 		*stmts = append(*stmts, Comment{Text: text})
 		return nil
@@ -229,8 +246,17 @@ func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
 		}
 	}
 
-	*stmts = append(*stmts, Comment{Text: text, Pos: Position{Line: line, Column: 1}})
+	comment := Comment{Text: text, Pos: Position{Line: line, Column: 1}}
+	insertAt := idx + 1
+	*stmts = append((*stmts)[:insertAt], append([]Statement{comment}, (*stmts)[insertAt:]...)...)
 	return nil
+}
+
+func normalizeCommentText(text string, raw bool) string {
+	if raw || text == "" {
+		return text
+	}
+	return " " + strings.TrimLeft(text, " \t")
 }
 
 func lastNonCommentIndex(stmts []Statement) int {

@@ -151,7 +151,7 @@ func TestDocumentAddCommentInlineOption(t *testing.T) {
 	doc := NewDocument()
 	doc.AddDirective("Listen", "8080")
 
-	if err := doc.AddComment(" app port", WithInlineComment()); err != nil {
+	if err := doc.AddComment("app port", WithInlineComment()); err != nil {
 		t.Fatalf("AddInlineComment() error = %v", err)
 	}
 
@@ -166,8 +166,8 @@ func TestBlockAddCommentInlineOption(t *testing.T) {
 	vh := doc.AddBlock("VirtualHost", "*:8080")
 	vh.AddDirective("ServerName", "scratch.local")
 
-	if err := vh.AddComment(" hostname", WithInlineComment()); err != nil {
-		t.Fatalf("AddInlineComment() error = %v", err)
+	if err := vh.AddComment("hostname", WithInlineComment()); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
 	}
 
 	rendered := doc.String()
@@ -178,7 +178,7 @@ func TestBlockAddCommentInlineOption(t *testing.T) {
 
 func TestAddCommentWithInlineOptionWithoutStatementReturnsError(t *testing.T) {
 	doc := NewDocument()
-	if err := doc.AddComment(" dangling", WithInlineComment()); err == nil {
+	if err := doc.AddComment("dangling", WithInlineComment()); err == nil {
 		t.Fatalf("AddComment() expected error")
 	}
 }
@@ -187,11 +187,33 @@ func TestAddInlineCommentCompatibilityAlias(t *testing.T) {
 	doc := NewDocument()
 	doc.AddDirective("Listen", "8080")
 
-	if err := doc.AddInlineComment(" alias"); err != nil {
+	if err := doc.AddInlineComment("alias"); err != nil {
 		t.Fatalf("AddInlineComment() error = %v", err)
 	}
 
 	if !strings.Contains(doc.String(), "Listen 8080 # alias") {
 		t.Fatalf("rendered output missing alias inline comment")
+	}
+}
+
+func TestAddCommentNormalizesDefaultText(t *testing.T) {
+	doc := NewDocument()
+	if err := doc.AddComment("app comment"); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+
+	if got := doc.String(); got != "# app comment\n" {
+		t.Fatalf("rendered output = %q, want %q", got, "# app comment\\n")
+	}
+}
+
+func TestAddCommentWithRawCommentTextKeepsVerbatim(t *testing.T) {
+	doc := NewDocument()
+	if err := doc.AddComment("\tapp comment", WithRawCommentText()); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+
+	if got := doc.String(); got != "#\tapp comment\n" {
+		t.Fatalf("rendered output = %q, want %q", got, "#\\tapp comment\\n")
 	}
 }
