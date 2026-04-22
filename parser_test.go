@@ -339,6 +339,46 @@ func TestParseFileWithIncludeResolutionConsumesInlineIncludeComment(t *testing.T
 	}
 }
 
+func TestParseFileWithIncludeResolutionAssignsUniqueLineNumbers(t *testing.T) {
+	doc, err := ParseFile(
+		"testdata/parser/include-line-offset/main.conf",
+		WithIncludeResolution("testdata/parser/include-line-offset"),
+	)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
+	}
+
+	seen := make(map[int]string)
+	for i, stmt := range doc.Statements {
+		switch s := stmt.(type) {
+		case Directive:
+			if prev, ok := seen[s.Pos.Line]; ok {
+				t.Fatalf("duplicate line %d between statement[%d] and %s", s.Pos.Line, i, prev)
+			}
+			seen[s.Pos.Line] = s.Name
+		case Comment:
+			if prev, ok := seen[s.Pos.Line]; ok {
+				t.Fatalf("duplicate line %d between statement[%d] and %s", s.Pos.Line, i, prev)
+			}
+			seen[s.Pos.Line] = "Comment"
+		default:
+			t.Fatalf("unexpected statement type at %d: %#v", i, stmt)
+		}
+	}
+
+	rendered := doc.String()
+	if strings.Contains(rendered, "ServerRoot \"/etc/apache2\" # included comment") {
+		t.Fatalf("rendered output incorrectly inlined included comment with root statement:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "# included comment") {
+		t.Fatalf("rendered output missing included comment line:\n%s", rendered)
+	}
+}
+
 func TestParseFileWithIncludeResolutionCircular(t *testing.T) {
 	_, err := ParseFile("testdata/parser/include-circular/a.conf", WithIncludeResolution("testdata/parser/include-circular"))
 	if err == nil {

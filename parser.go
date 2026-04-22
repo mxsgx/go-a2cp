@@ -180,6 +180,7 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 
 func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
 	out := make([]Statement, 0, len(stmts))
+	nextLine := maxStatementLine(stmts) + 1
 
 	for i := 0; i < len(stmts); i++ {
 		stmt := stmts[i]
@@ -198,7 +199,9 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 				if inlineComment != nil {
 					out = append(out, *inlineComment)
 				}
-				out = append(out, included...)
+				prepared, advancedNextLine := offsetStatementsToNextLine(included, nextLine)
+				nextLine = advancedNextLine
+				out = append(out, prepared...)
 				continue
 			}
 			out = append(out, s)
@@ -216,7 +219,9 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 				if inlineComment != nil {
 					out = append(out, *inlineComment)
 				}
-				out = append(out, included...)
+				prepared, advancedNextLine := offsetStatementsToNextLine(included, nextLine)
+				nextLine = advancedNextLine
+				out = append(out, prepared...)
 				continue
 			}
 			out = append(out, s)
@@ -293,6 +298,166 @@ func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, stat
 	}
 
 	return out, nil
+}
+
+func offsetStatementsToNextLine(stmts []Statement, nextLine int) ([]Statement, int) {
+	if len(stmts) == 0 {
+		return nil, nextLine
+	}
+
+	minLine, ok := minStatementLine(stmts)
+	if !ok {
+		cloned := cloneStatements(stmts)
+		return cloned, nextLine
+	}
+
+	maxLine := maxStatementLine(stmts)
+	offset := nextLine - minLine
+	cloned := cloneStatements(stmts)
+	if offset != 0 {
+		shiftStatementLines(cloned, offset)
+	}
+	return cloned, nextLine + (maxLine - minLine + 1)
+}
+
+func cloneStatements(stmts []Statement) []Statement {
+	cloned := make([]Statement, len(stmts))
+	for i, stmt := range stmts {
+		cloned[i] = cloneStatement(stmt)
+	}
+	return cloned
+}
+
+func cloneStatement(stmt Statement) Statement {
+	switch s := stmt.(type) {
+	case Directive:
+		return s
+	case *Directive:
+		cloned := *s
+		return &cloned
+	case Comment:
+		return s
+	case *Comment:
+		cloned := *s
+		return &cloned
+	case *Block:
+		cloned := *s
+		cloned.Children = cloneStatements(s.Children)
+		return &cloned
+	default:
+		return stmt
+	}
+}
+
+func shiftStatementLines(stmts []Statement, offset int) {
+	for i, stmt := range stmts {
+		switch s := stmt.(type) {
+		case Directive:
+			s.Pos.Line += offset
+			stmts[i] = s
+		case *Directive:
+			s.Pos.Line += offset
+		case Comment:
+			s.Pos.Line += offset
+			stmts[i] = s
+		case *Comment:
+			s.Pos.Line += offset
+		case *Block:
+			s.Pos.Line += offset
+			s.EndPos.Line += offset
+			shiftStatementLines(s.Children, offset)
+		}
+	}
+}
+
+func minStatementLine(stmts []Statement) (int, bool) {
+	minLine := 0
+	found := false
+	for _, stmt := range stmts {
+		if line, ok := statementMinLine(stmt); ok {
+			if !found || line < minLine {
+				minLine = line
+				found = true
+			}
+		}
+	}
+	return minLine, found
+}
+
+func statementMinLine(stmt Statement) (int, bool) {
+	switch s := stmt.(type) {
+	case Directive:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Directive:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case Comment:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Comment:
+		if s.Pos.Line > 0 {
+			return s.Pos.Line, true
+		}
+	case *Block:
+		candidate := 0
+		found := false
+		if s.Pos.Line > 0 {
+			candidate = s.Pos.Line
+			found = true
+		}
+		if s.EndPos.Line > 0 && (!found || s.EndPos.Line < candidate) {
+			candidate = s.EndPos.Line
+			found = true
+		}
+		if childLine, ok := minStatementLine(s.Children); ok {
+			if !found || childLine < candidate {
+				candidate = childLine
+				found = true
+			}
+		}
+		if found {
+			return candidate, true
+		}
+	}
+	return 0, false
+}
+
+func maxStatementLine(stmts []Statement) int {
+	maxLine := 0
+	for _, stmt := range stmts {
+		if line := statementMaxLine(stmt); line > maxLine {
+			maxLine = line
+		}
+	}
+	return maxLine
+}
+
+func statementMaxLine(stmt Statement) int {
+	switch s := stmt.(type) {
+	case Directive:
+		return s.Pos.Line
+	case *Directive:
+		return s.Pos.Line
+	case Comment:
+		return s.Pos.Line
+	case *Comment:
+		return s.Pos.Line
+	case *Block:
+		maxLine := s.Pos.Line
+		if s.EndPos.Line > maxLine {
+			maxLine = s.EndPos.Line
+		}
+		if childMax := maxStatementLine(s.Children); childMax > maxLine {
+			maxLine = childMax
+		}
+		return maxLine
+	default:
+		return 0
+	}
 }
 
 func parseIncludedFile(path string, cfg parseOptions, state *includeState) (*Document, error) {
