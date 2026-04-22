@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Raw text option `WithRawCommentText()` for verbatim comment spacing.
 - Trailing comments on closing tags are now preserved inline via `Block.EndComment`.
 - Parser fixture `testdata/parser/include-inline-comment/` for include-resolution inline comment behavior.
+- Parser fixture `testdata/parser/include-line-offset/` for include-resolution line-offset behavior.
 
 ### Changed
 - Parser now preserves full-line and inline comments as `Comment` statements.
@@ -21,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - Parser no longer rescans the full accumulated continuation buffer to track quote state (incremental state tracking).
 - Continuation line joining now normalizes whitespace to avoid doubled spaces in rendered output.
 - Include resolution now consumes inline comments attached to `Include`/`IncludeOptional` directives so they stay near the include expansion.
+- Include resolution now offsets included statements/comments into unique line ranges so inline comment matching cannot cross file boundaries.
+- Repeated inline `AddComment(..., WithInlineComment())` calls now replace the existing inline comment instead of creating duplicates.
 - Renderer now writes `Comment` statements back and keeps inline comments on the same line.
 - Renderer now keeps closing-tag comments on the same line as `</...>`.
 - Renderer now escapes `\r` and `\n` inside comment text to prevent multi-line comment injection in generated config.

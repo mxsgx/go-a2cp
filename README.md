@@ -10,7 +10,7 @@
 - Preserves trailing comments on closing tags (for example `</Directory> # end`)
 - Supports quoted arguments (`"..."` and `'...'`)
 - Supports line continuation using trailing `\\`
-- Optional recursive include resolution for `Include` and `IncludeOptional`
+- Optional recursive include resolution for `Include` and `IncludeOptional` with unique line ranges per included file
 - Supports AST manipulation (append/insert/remove/find)
 - Supports creating configs from scratch (builder-style API)
 - Renders and writes modified config back to file
@@ -86,13 +86,15 @@ func main() {
 - `(*Block).AddInlineComment(text string) error` (compatibility alias)
 
 `AddComment` normalizes non-empty text by default so rendered comments use `# ` prefix.
+Comment text is rendered safely: newline characters are escaped as `\\n`/`\\r` to avoid multi-line injection.
 Use `WithRawCommentText()` to preserve leading whitespace verbatim.
+
 - AST nodes:
-	- `Comment`
-	- `Directive`
-	- `Block` (includes `EndComment` for closing-tag trailing comments)
-	- `Document`
-	- `Position`
+  - `Comment`
+  - `Directive`
+  - `Block` (includes `EndComment` for closing-tag trailing comments)
+  - `Document`
+  - `Position`
 
 ## Testing
 
