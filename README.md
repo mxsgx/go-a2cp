@@ -69,15 +69,21 @@ func main() {
 - `NewDocument() *Document`
 - `NewDirective(name string, args ...string) Directive`
 - `NewBlock(name string, args ...string) *Block`
+- `WithInlineComment() CommentOption`
 - `(*Document).String() string`
 - `(*Document).WriteTo(w io.Writer) (int64, error)`
 - `(*Document).Save(path string) error`
 - `(*Document).SaveWithMode(path string, mode os.FileMode) error`
 - `(*Document).AddDirective(name string, args ...string) *Document`
 - `(*Document).AddBlock(name string, args ...string) *Block`
+- `(*Document).AddComment(text string, opts ...CommentOption) error`
+- `(*Document).AddInlineComment(text string) error` (compatibility alias)
 - `(*Block).AddDirective(name string, args ...string) *Block`
 - `(*Block).AddBlock(name string, args ...string) *Block`
+- `(*Block).AddComment(text string, opts ...CommentOption) error`
+- `(*Block).AddInlineComment(text string) error` (compatibility alias)
 - AST nodes:
+  - `Comment`
   - `Directive`
   - `Block`
   - `Document`
@@ -105,6 +111,7 @@ Runnable examples are available in `examples/`:
 - `examples/parse-file`: parse a `.conf` file from disk
 - `examples/include-resolution`: parse config with recursive `Include` expansion
 - `examples/include-optional-skip`: parse config with missing `IncludeOptional` target (skipped)
+- `examples/comment-roundtrip`: parse and render config while preserving comments
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -115,6 +122,7 @@ go run ./examples/parse-string
 go run ./examples/parse-file
 go run ./examples/include-resolution
 go run ./examples/include-optional-skip
+go run ./examples/comment-roundtrip
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```

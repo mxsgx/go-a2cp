@@ -94,6 +94,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 	for _, ll := range logicalLines {
 		trimmed := strings.TrimSpace(ll.Text)
 		if trimmed == "" {
+			if ll.HasComment {
+				appendStmt(Comment{
+					Text: ll.Comment,
+					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+				})
+			}
 			continue
 		}
 
@@ -105,6 +111,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 
 			b := &Block{Name: name, Args: args, Pos: Position{Line: ll.Line, Column: ll.Column}}
 			appendStmt(b)
+			if ll.HasComment {
+				appendStmt(Comment{
+					Text: ll.Comment,
+					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+				})
+			}
 			stack = append(stack, b)
 			continue
 		}
@@ -124,6 +136,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 			}
 			top.EndPos = Position{Line: ll.Line, Column: ll.Column}
 			stack = stack[:len(stack)-1]
+			if ll.HasComment {
+				appendStmt(Comment{
+					Text: ll.Comment,
+					Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+				})
+			}
 			continue
 		}
 
@@ -139,6 +157,12 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 			Args: fields[1:],
 			Pos:  Position{Line: ll.Line, Column: ll.Column},
 		})
+		if ll.HasComment {
+			appendStmt(Comment{
+				Text: ll.Comment,
+				Pos:  Position{Line: ll.Line, Column: ll.CommentColumn},
+			})
+		}
 	}
 
 	if len(stack) > 0 {
@@ -273,9 +297,12 @@ func canonicalPath(path string) (string, error) {
 }
 
 type logicalLine struct {
-	Text   string
-	Line   int
-	Column int
+	Text          string
+	Comment       string
+	HasComment    bool
+	CommentColumn int
+	Line          int
+	Column        int
 }
 
 func readLogicalLines(r io.Reader) ([]logicalLine, error) {
@@ -290,7 +317,7 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 		physicalLine++
 		line := scanner.Text()
 
-		lineNoComment := stripComments(line)
+		lineNoComment, comment, commentColumn, hasComment := splitCodeAndComment(line)
 		lineNoComment = strings.TrimRightFunc(lineNoComment, unicode.IsSpace)
 
 		if current.Len() == 0 {
@@ -305,9 +332,12 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 
 		current.WriteString(lineNoComment)
 		out = append(out, logicalLine{
-			Text:   current.String(),
-			Line:   currentStartLine,
-			Column: 1,
+			Text:          current.String(),
+			Comment:       comment,
+			HasComment:    hasComment,
+			CommentColumn: commentColumn,
+			Line:          currentStartLine,
+			Column:        1,
 		})
 		current.Reset()
 	}
@@ -327,13 +357,16 @@ func readLogicalLines(r io.Reader) ([]logicalLine, error) {
 	return out, nil
 }
 
-func stripComments(line string) string {
+func splitCodeAndComment(line string) (string, string, int, bool) {
 	var out strings.Builder
 	inSingle := false
 	inDouble := false
 	escaped := false
+	column := 0
 
-	for _, r := range line {
+	for i, r := range line {
+		column++
+
 		if escaped {
 			out.WriteRune(r)
 			escaped = false
@@ -359,13 +392,13 @@ func stripComments(line string) string {
 		}
 
 		if r == '#' && !inSingle && !inDouble {
-			break
+			return out.String(), line[i+1:], column, true
 		}
 
 		out.WriteRune(r)
 	}
 
-	return out.String()
+	return out.String(), "", 0, false
 }
 
 func endsWithUnescapedBackslash(s string) bool {

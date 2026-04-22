@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
-- No unreleased changes yet.
+- New AST node `Comment` for preserved Apache2 comments.
+- Runnable example `examples/comment-roundtrip` for comment-preserving round-trip rendering.
+- Helper APIs `(*Document).AddComment(text string, opts ...CommentOption) error` and `(*Block).AddComment(text string, opts ...CommentOption) error`.
+- Inline comment option `WithInlineComment()`.
+
+### Changed
+- Parser now preserves full-line and inline comments as `Comment` statements.
+- Renderer now writes `Comment` statements back and keeps inline comments on the same line.
+- `AddInlineComment` remains available as a compatibility alias for `AddComment(text, WithInlineComment())`.
 
 ## v0.2.0 - 2026-04-17
 

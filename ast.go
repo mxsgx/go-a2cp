@@ -20,6 +20,14 @@ type Directive struct {
 
 func (Directive) isStatement() {}
 
+// Comment represents a config comment, without the leading #.
+type Comment struct {
+	Text string
+	Pos  Position
+}
+
+func (Comment) isStatement() {}
+
 // Block represents a container directive, e.g. `<Directory /var/www> ... </Directory>`.
 type Block struct {
 	Name     string

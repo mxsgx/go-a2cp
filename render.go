@@ -13,12 +13,32 @@ func (d *Document) String() string {
 }
 
 func renderStatements(b *strings.Builder, statements []Statement, depth int) {
-	for _, stmt := range statements {
-		renderStatement(b, stmt, depth)
+	for i := 0; i < len(statements); i++ {
+		stmt := statements[i]
+		if _, ok := asComment(stmt); ok {
+			renderStatement(b, stmt, depth, "", false)
+			continue
+		}
+
+		inlineText := ""
+		hasInline := false
+		if i+1 < len(statements) {
+			nextComment, ok := asComment(statements[i+1])
+			if ok {
+				stmtPos, hasPos := statementPos(stmt)
+				if hasPos && stmtPos.Line > 0 && nextComment.Pos.Line == stmtPos.Line {
+					inlineText = nextComment.Text
+					hasInline = true
+					i++
+				}
+			}
+		}
+
+		renderStatement(b, stmt, depth, inlineText, hasInline)
 	}
 }
 
-func renderStatement(b *strings.Builder, stmt Statement, depth int) {
+func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText string, hasInline bool) {
 	indent := strings.Repeat("    ", depth)
 
 	switch s := stmt.(type) {
@@ -29,6 +49,10 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int) {
 			b.WriteString(" ")
 			b.WriteString(renderArg(arg))
 		}
+		if hasInline {
+			b.WriteString(" #")
+			b.WriteString(inlineText)
+		}
 		b.WriteString("\n")
 	case *Directive:
 		b.WriteString(indent)
@@ -37,6 +61,20 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int) {
 			b.WriteString(" ")
 			b.WriteString(renderArg(arg))
 		}
+		if hasInline {
+			b.WriteString(" #")
+			b.WriteString(inlineText)
+		}
+		b.WriteString("\n")
+	case Comment:
+		b.WriteString(indent)
+		b.WriteString("#")
+		b.WriteString(s.Text)
+		b.WriteString("\n")
+	case *Comment:
+		b.WriteString(indent)
+		b.WriteString("#")
+		b.WriteString(s.Text)
 		b.WriteString("\n")
 	case *Block:
 		b.WriteString(indent)
@@ -46,7 +84,13 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int) {
 			b.WriteString(" ")
 			b.WriteString(renderArg(arg))
 		}
-		b.WriteString(">\n")
+		if hasInline {
+			b.WriteString("> #")
+			b.WriteString(inlineText)
+		} else {
+			b.WriteString(">")
+		}
+		b.WriteString("\n")
 
 		renderStatements(b, s.Children, depth+1)
 
@@ -54,6 +98,34 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int) {
 		b.WriteString("</")
 		b.WriteString(s.Name)
 		b.WriteString(">\n")
+	}
+}
+
+func asComment(stmt Statement) (Comment, bool) {
+	switch c := stmt.(type) {
+	case Comment:
+		return c, true
+	case *Comment:
+		return *c, true
+	default:
+		return Comment{}, false
+	}
+}
+
+func statementPos(stmt Statement) (Position, bool) {
+	switch s := stmt.(type) {
+	case Directive:
+		return s.Pos, true
+	case *Directive:
+		return s.Pos, true
+	case *Block:
+		return s.Pos, true
+	case Comment:
+		return s.Pos, true
+	case *Comment:
+		return s.Pos, true
+	default:
+		return Position{}, false
 	}
 }
 

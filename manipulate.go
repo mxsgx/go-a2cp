@@ -5,6 +5,20 @@ import (
 	"strings"
 )
 
+// CommentOption configures how a comment is added to a document or block.
+type CommentOption func(*commentOptions)
+
+type commentOptions struct {
+	inline bool
+}
+
+// WithInlineComment marks the comment as inline with the previous non-comment statement.
+func WithInlineComment() CommentOption {
+	return func(cfg *commentOptions) {
+		cfg.inline = true
+	}
+}
+
 // NewDocument creates an empty configuration document.
 func NewDocument() *Document {
 	return &Document{}
@@ -29,6 +43,18 @@ func (d *Document) Append(stmt Statement) {
 func (d *Document) AddDirective(name string, args ...string) *Document {
 	d.Append(NewDirective(name, args...))
 	return d
+}
+
+// AddComment appends a comment to the document root.
+// Use WithInlineComment to render the comment on the same line as the previous statement.
+func (d *Document) AddComment(text string, opts ...CommentOption) error {
+	return addComment(&d.Statements, text, opts...)
+}
+
+// AddInlineComment appends an inline comment for the last non-comment root statement.
+// Deprecated: use AddComment(text, WithInlineComment()) instead.
+func (d *Document) AddInlineComment(text string) error {
+	return d.AddComment(text, WithInlineComment())
 }
 
 // AddBlock appends a block and returns it for nested chaining.
@@ -98,6 +124,18 @@ func (b *Block) AddDirective(name string, args ...string) *Block {
 	return b
 }
 
+// AddComment appends a comment to the block.
+// Use WithInlineComment to render the comment on the same line as the previous statement.
+func (b *Block) AddComment(text string, opts ...CommentOption) error {
+	return addComment(&b.Children, text, opts...)
+}
+
+// AddInlineComment appends an inline comment for the last non-comment child statement.
+// Deprecated: use AddComment(text, WithInlineComment()) instead.
+func (b *Block) AddInlineComment(text string) error {
+	return b.AddComment(text, WithInlineComment())
+}
+
 // AddBlock appends a nested block child and returns it.
 func (b *Block) AddBlock(name string, args ...string) *Block {
 	child := NewBlock(name, args...)
@@ -163,4 +201,90 @@ func asDirective(stmt Statement) (Directive, bool) {
 	default:
 		return Directive{}, false
 	}
+}
+
+func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {
+	cfg := commentOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
+	if !cfg.inline {
+		*stmts = append(*stmts, Comment{Text: text})
+		return nil
+	}
+
+	idx := lastNonCommentIndex(*stmts)
+	if idx < 0 {
+		return fmt.Errorf("inline comment requires at least one non-comment statement")
+	}
+
+	line := statementLine((*stmts)[idx])
+	if line <= 0 {
+		line = nextSyntheticLine(*stmts)
+		if err := setStatementLine(stmts, idx, line); err != nil {
+			return err
+		}
+	}
+
+	*stmts = append(*stmts, Comment{Text: text, Pos: Position{Line: line, Column: 1}})
+	return nil
+}
+
+func lastNonCommentIndex(stmts []Statement) int {
+	for i := len(stmts) - 1; i >= 0; i-- {
+		switch stmts[i].(type) {
+		case Comment, *Comment:
+			continue
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+func statementLine(stmt Statement) int {
+	switch s := stmt.(type) {
+	case Directive:
+		return s.Pos.Line
+	case *Directive:
+		return s.Pos.Line
+	case *Block:
+		return s.Pos.Line
+	default:
+		return 0
+	}
+}
+
+func setStatementLine(stmts *[]Statement, index int, line int) error {
+	switch s := (*stmts)[index].(type) {
+	case Directive:
+		s.Pos.Line = line
+		(*stmts)[index] = s
+		return nil
+	case *Directive:
+		s.Pos.Line = line
+		return nil
+	case *Block:
+		s.Pos.Line = line
+		return nil
+	default:
+		return fmt.Errorf("last statement does not support inline comments")
+	}
+}
+
+func nextSyntheticLine(stmts []Statement) int {
+	maxLine := 0
+	for _, stmt := range stmts {
+		line := statementLine(stmt)
+		if line > maxLine {
+			maxLine = line
+		}
+	}
+	if maxLine == 0 {
+		return 1
+	}
+	return maxLine + 1
 }

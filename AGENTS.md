@@ -11,7 +11,7 @@ This repository contains `go-a2cp`, a Go library for parsing and manipulating Ap
 
 ## Key Files
 
-- `ast.go`: AST types (`Document`, `Directive`, `Block`, `Position`).
+- `ast.go`: AST types (`Document`, `Directive`, `Block`, `Position`, `Comment`).
 - `parser.go`: parsing logic.
 - `render.go`: string rendering.
 - `manipulate.go`: mutation helpers and builders.

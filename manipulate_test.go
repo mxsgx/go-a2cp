@@ -1,6 +1,9 @@
 package a2cp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDocumentManipulation(t *testing.T) {
 	doc := &Document{}
@@ -82,6 +85,40 @@ func TestRoundTripFixtureFile(t *testing.T) {
 	}
 }
 
+func TestRoundTripFixtureFileWithComments(t *testing.T) {
+	doc, err := ParseFile("testdata/roundtrip/comments.conf")
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "ServerRoot /etc/apache2 # server root") {
+		t.Fatalf("rendered output missing inline directive comment:\n%s", rendered)
+	}
+
+	parsed, err := ParseString(rendered)
+	if err != nil {
+		t.Fatalf("ParseString(rendered) error = %v", err)
+	}
+
+	if got, want := countComments(parsed.Statements), countComments(doc.Statements); got != want {
+		t.Fatalf("comment count mismatch: got %d, want %d", got, want)
+	}
+}
+
+func countComments(stmts []Statement) int {
+	total := 0
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case Comment, *Comment:
+			total++
+		case *Block:
+			total += countComments(s.Children)
+		}
+	}
+	return total
+}
+
 func TestBuildFromScratch(t *testing.T) {
 	doc := NewDocument()
 	doc.AddDirective("Listen", "8080")
@@ -107,5 +144,54 @@ func TestBuildFromScratch(t *testing.T) {
 	}
 	if got := len(parsed.Statements); got != 2 {
 		t.Fatalf("parsed top-level statements = %d, want 2", got)
+	}
+}
+
+func TestDocumentAddCommentInlineOption(t *testing.T) {
+	doc := NewDocument()
+	doc.AddDirective("Listen", "8080")
+
+	if err := doc.AddComment(" app port", WithInlineComment()); err != nil {
+		t.Fatalf("AddInlineComment() error = %v", err)
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "Listen 8080 # app port") {
+		t.Fatalf("rendered output missing inline comment:\n%s", rendered)
+	}
+}
+
+func TestBlockAddCommentInlineOption(t *testing.T) {
+	doc := NewDocument()
+	vh := doc.AddBlock("VirtualHost", "*:8080")
+	vh.AddDirective("ServerName", "scratch.local")
+
+	if err := vh.AddComment(" hostname", WithInlineComment()); err != nil {
+		t.Fatalf("AddInlineComment() error = %v", err)
+	}
+
+	rendered := doc.String()
+	if !strings.Contains(rendered, "    ServerName scratch.local # hostname") {
+		t.Fatalf("rendered output missing inline block comment:\n%s", rendered)
+	}
+}
+
+func TestAddCommentWithInlineOptionWithoutStatementReturnsError(t *testing.T) {
+	doc := NewDocument()
+	if err := doc.AddComment(" dangling", WithInlineComment()); err == nil {
+		t.Fatalf("AddComment() expected error")
+	}
+}
+
+func TestAddInlineCommentCompatibilityAlias(t *testing.T) {
+	doc := NewDocument()
+	doc.AddDirective("Listen", "8080")
+
+	if err := doc.AddInlineComment(" alias"); err != nil {
+		t.Fatalf("AddInlineComment() error = %v", err)
+	}
+
+	if !strings.Contains(doc.String(), "Listen 8080 # alias") {
+		t.Fatalf("rendered output missing alias inline comment")
 	}
 }

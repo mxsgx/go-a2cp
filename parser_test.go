@@ -16,13 +16,21 @@ Listen 80   # inline comment
 		t.Fatalf("ParseString() error = %v", err)
 	}
 
-	if got := len(doc.Statements); got != 2 {
-		t.Fatalf("statements = %d, want 2", got)
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
 	}
 
-	d0, ok := doc.Statements[0].(Directive)
+	c0, ok := doc.Statements[0].(Comment)
 	if !ok {
-		t.Fatalf("statement[0] not Directive")
+		t.Fatalf("statement[0] not Comment")
+	}
+	if c0.Text != " global comment" {
+		t.Fatalf("comment text = %q, want %q", c0.Text, " global comment")
+	}
+
+	d0, ok := doc.Statements[1].(Directive)
+	if !ok {
+		t.Fatalf("statement[1] not Directive")
 	}
 	if d0.Name != "ServerRoot" {
 		t.Fatalf("directive name = %q, want %q", d0.Name, "ServerRoot")
@@ -31,12 +39,20 @@ Listen 80   # inline comment
 		t.Fatalf("directive args = %#v", d0.Args)
 	}
 
-	d1, ok := doc.Statements[1].(Directive)
+	d1, ok := doc.Statements[2].(Directive)
 	if !ok {
-		t.Fatalf("statement[1] not Directive")
+		t.Fatalf("statement[2] not Directive")
 	}
 	if d1.Name != "Listen" || len(d1.Args) != 1 || d1.Args[0] != "80" {
 		t.Fatalf("directive mismatch: %#v", d1)
+	}
+
+	c1, ok := doc.Statements[3].(Comment)
+	if !ok {
+		t.Fatalf("statement[3] not Comment")
+	}
+	if c1.Text != " inline comment" {
+		t.Fatalf("comment text = %q, want %q", c1.Text, " inline comment")
 	}
 }
 
@@ -124,18 +140,23 @@ func TestParseFileFixture(t *testing.T) {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
 
-	if got := len(doc.Statements); got != 3 {
-		t.Fatalf("statements = %d, want 3", got)
+	if got := len(doc.Statements); got != 4 {
+		t.Fatalf("statements = %d, want 4", got)
 	}
 
-	root, ok := doc.Statements[0].(Directive)
-	if !ok || root.Name != "ServerRoot" {
+	comment, ok := doc.Statements[0].(Comment)
+	if !ok || comment.Text != " basic parser fixture" {
 		t.Fatalf("statement[0] mismatch: %#v", doc.Statements[0])
 	}
 
-	directory, ok := doc.Statements[2].(*Block)
+	root, ok := doc.Statements[1].(Directive)
+	if !ok || root.Name != "ServerRoot" {
+		t.Fatalf("statement[1] mismatch: %#v", doc.Statements[1])
+	}
+
+	directory, ok := doc.Statements[3].(*Block)
 	if !ok || directory.Name != "Directory" {
-		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+		t.Fatalf("statement[3] mismatch: %#v", doc.Statements[3])
 	}
 	if len(directory.Children) != 1 {
 		t.Fatalf("Directory children = %d, want 1", len(directory.Children))
