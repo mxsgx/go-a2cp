@@ -181,13 +181,40 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {
 	out := make([]Statement, 0, len(stmts))
 
-	for _, stmt := range stmts {
+	for i := 0; i < len(stmts); i++ {
+		stmt := stmts[i]
 		switch s := stmt.(type) {
 		case Directive:
 			if strings.EqualFold(s.Name, "Include") || strings.EqualFold(s.Name, "IncludeOptional") {
+				inlineComment, consumed := consumeInlineCommentAfter(stmts, i, s.Pos.Line)
+				if consumed {
+					i++
+				}
+
 				included, err := resolveIncludeDirective(s, baseDir, cfg, state)
 				if err != nil {
 					return nil, err
+				}
+				if inlineComment != nil {
+					out = append(out, *inlineComment)
+				}
+				out = append(out, included...)
+				continue
+			}
+			out = append(out, s)
+		case *Directive:
+			if strings.EqualFold(s.Name, "Include") || strings.EqualFold(s.Name, "IncludeOptional") {
+				inlineComment, consumed := consumeInlineCommentAfter(stmts, i, s.Pos.Line)
+				if consumed {
+					i++
+				}
+
+				included, err := resolveIncludeDirective(*s, baseDir, cfg, state)
+				if err != nil {
+					return nil, err
+				}
+				if inlineComment != nil {
+					out = append(out, *inlineComment)
 				}
 				out = append(out, included...)
 				continue
@@ -206,6 +233,28 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 	}
 
 	return out, nil
+}
+
+func consumeInlineCommentAfter(stmts []Statement, includeIdx int, includeLine int) (*Comment, bool) {
+	nextIdx := includeIdx + 1
+	if nextIdx >= len(stmts) {
+		return nil, false
+	}
+
+	switch c := stmts[nextIdx].(type) {
+	case Comment:
+		if includeLine > 0 && c.Pos.Line == includeLine {
+			copy := c
+			return &copy, true
+		}
+	case *Comment:
+		if includeLine > 0 && c.Pos.Line == includeLine {
+			copy := *c
+			return &copy, true
+		}
+	}
+
+	return nil, false
 }
 
 func resolveIncludeDirective(d Directive, baseDir string, cfg parseOptions, state *includeState) ([]Statement, error) {

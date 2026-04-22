@@ -51,7 +51,7 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText s
 		}
 		if hasInline {
 			b.WriteString(" #")
-			b.WriteString(inlineText)
+			b.WriteString(escapeCommentText(inlineText))
 		}
 		b.WriteString("\n")
 	case *Directive:
@@ -63,18 +63,18 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText s
 		}
 		if hasInline {
 			b.WriteString(" #")
-			b.WriteString(inlineText)
+			b.WriteString(escapeCommentText(inlineText))
 		}
 		b.WriteString("\n")
 	case Comment:
 		b.WriteString(indent)
 		b.WriteString("#")
-		b.WriteString(s.Text)
+		b.WriteString(escapeCommentText(s.Text))
 		b.WriteString("\n")
 	case *Comment:
 		b.WriteString(indent)
 		b.WriteString("#")
-		b.WriteString(s.Text)
+		b.WriteString(escapeCommentText(s.Text))
 		b.WriteString("\n")
 	case *Block:
 		b.WriteString(indent)
@@ -86,7 +86,7 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText s
 		}
 		if hasInline {
 			b.WriteString("> #")
-			b.WriteString(inlineText)
+			b.WriteString(escapeCommentText(inlineText))
 		} else {
 			b.WriteString(">")
 		}
@@ -100,10 +100,16 @@ func renderStatement(b *strings.Builder, stmt Statement, depth int, inlineText s
 		b.WriteString(">")
 		if s.EndComment != "" {
 			b.WriteString(" #")
-			b.WriteString(s.EndComment)
+			b.WriteString(escapeCommentText(s.EndComment))
 		}
 		b.WriteString("\n")
 	}
+}
+
+func escapeCommentText(text string) string {
+	text = strings.ReplaceAll(text, "\r", "\\r")
+	text = strings.ReplaceAll(text, "\n", "\\n")
+	return text
 }
 
 func asComment(stmt Statement) (Comment, bool) {

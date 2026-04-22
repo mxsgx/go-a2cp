@@ -217,3 +217,26 @@ func TestAddCommentWithRawCommentTextKeepsVerbatim(t *testing.T) {
 		t.Fatalf("rendered output = %q, want %q", got, "#\\tapp comment\\n")
 	}
 }
+
+func TestRenderEscapesCommentNewlines(t *testing.T) {
+	doc := NewDocument()
+	doc.AddDirective("Listen", "8080")
+
+	if err := doc.AddComment("top\nline"); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+	if err := doc.AddComment("inline\r\nline", WithInlineComment(), WithRawCommentText()); err != nil {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+
+	rendered := doc.String()
+	if strings.Contains(rendered, "# top\nline") {
+		t.Fatalf("rendered output contains unescaped newline in comment:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "# top\\nline") {
+		t.Fatalf("rendered output missing escaped newline sequence:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Listen 8080 #inline\\r\\nline") {
+		t.Fatalf("rendered output missing escaped CRLF inline comment:\n%s", rendered)
+	}
+}
