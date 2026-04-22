@@ -37,5 +37,9 @@ jobs:
         run: |
           go run ./examples/parse-string
           go run ./examples/parse-file
+          go run ./examples/include-resolution
+          go run ./examples/include-optional-skip
+          go run ./examples/comment-roundtrip
+          go run ./examples/backslash-comments
           go run ./examples/manipulate-save
           go run ./examples/from-scratch
