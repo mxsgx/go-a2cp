@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
+- No unreleased changes yet.
+
+## v0.3.0 - 2026-04-23
+
+### Added
 - New AST node `Comment` for preserved Apache2 comments.
 - Runnable example `examples/comment-roundtrip` for comment-preserving round-trip rendering.
 - Runnable example `examples/backslash-comments` for continuation lines with trailing `\\` and comment preservation.
