@@ -244,13 +244,13 @@ func consumeInlineCommentAfter(stmts []Statement, includeIdx int, includeLine in
 	switch c := stmts[nextIdx].(type) {
 	case Comment:
 		if includeLine > 0 && c.Pos.Line == includeLine {
-			copy := c
-			return &copy, true
+			cloned := c
+			return &cloned, true
 		}
 	case *Comment:
 		if includeLine > 0 && c.Pos.Line == includeLine {
-			copy := *c
-			return &copy, true
+			cloned := *c
+			return &cloned, true
 		}
 	}
 
