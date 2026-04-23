@@ -1,40 +1,25 @@
-# Copilot Instructions
+# RTK — Token-Optimized CLI
 
-This repository contains `go-a2cp`, a Go library for parsing and manipulating Apache2 `.conf` files.
+**rtk** is a CLI proxy that filters and compresses command outputs, saving 60-90% tokens.
 
-## Goals
+## Rule
 
-- Keep changes small and focused.
-- Preserve public API stability unless the task explicitly requires a breaking change.
-- Add or update tests for behavior changes.
-- Update documentation when public API or workflow changes.
+Always prefix shell commands with `rtk`:
 
-## Codebase Map
+```bash
+# Instead of:              Use:
+git status                 rtk git status
+git log -10                rtk git log -10
+cargo test                 rtk cargo test
+docker ps                  rtk docker ps
+kubectl get pods           rtk kubectl pods
+```
 
-- `ast.go`: AST types (`Document`, `Directive`, `Block`, `Position`).
-- `parser.go`: parsing logic.
-- `render.go`: rendering logic.
-- `manipulate.go`: mutation helpers and builders.
-- `io.go`: file helpers.
-- `examples/`: runnable example programs.
-- `testdata/`: parser and round-trip fixtures.
+## Meta commands (use directly)
 
-## Practical Rules
-
-- Prefer minimal, focused edits.
-- Avoid destructive git operations.
-- Keep ASCII unless the existing file uses Unicode.
-- Use existing naming and formatting conventions.
-- Do not add inline comments unless they improve clarity.
-
-## Validation
-
-- Run `go test ./...` after code changes.
-- Run `go run ./examples/...` when example programs are affected.
-
-## Useful Paths
-
-- Repository guide: `AGENTS.md`
-- Versioning policy: `VERSIONING.md`
-- Changelog: `CHANGELOG.md`
-- Contributing guide: `CONTRIBUTING.md`
+```bash
+rtk gain              # Token savings dashboard
+rtk gain --history    # Per-command savings history
+rtk discover          # Find missed rtk opportunities
+rtk proxy <cmd>       # Run raw (no filtering) but track usage
+```
