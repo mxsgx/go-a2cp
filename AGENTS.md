@@ -14,8 +14,12 @@ This repository contains `go-a2cp`, a Go library for parsing and manipulating Ap
 - `ast.go`: AST types (`Document`, `Directive`, `Block`, `Position`, `Comment`).
 - `parser.go`: parsing logic.
 - `render.go`: string rendering.
-- `manipulate.go`: mutation helpers and builders.
+- `document.go`: document-level builders, mutation helpers, walk traversal, and recursive find helpers.
+- `block.go`: block-level builders, mutation helpers, walk traversal, and recursive find helpers.
+- `directive.go`: directive constructor and directive assertion helper.
 - `io.go`: file/stream helpers.
+- `document_test.go`, `block_test.go`, `directive_test.go`: split manipulation API tests.
+- `walk_test.go`: walk traversal and recursive find behavior tests.
 - `examples/`: runnable examples.
 - `testdata/`: fixture `.conf` files for tests.
 
@@ -25,8 +29,9 @@ This repository contains `go-a2cp`, a Go library for parsing and manipulating Ap
 - Do not revert user changes you did not make.
 - Use `apply_patch` for edits.
 - Keep public API changes deliberate and documented.
-- Add or update tests for behavior changes.
+- Add or update tests and examples for behavior changes.
 - Preserve existing style and ASCII unless the file already uses otherwise.
+- Add or update CHANGELOG.md if any changes.
 
 ## Common Commands
 
@@ -38,6 +43,8 @@ This repository contains `go-a2cp`, a Go library for parsing and manipulating Ap
 - `go run ./examples/from-scratch`
 - `go run ./examples/include-resolution`
 - `go run ./examples/include-optional-skip`
+- `go run ./examples/walk`
+- `go run ./examples/find-recursive`
 
 ## Test Fixture Conventions
 

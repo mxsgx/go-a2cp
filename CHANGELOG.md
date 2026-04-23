@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - Runnable example `examples/walk` for full AST traversal with depth-aware output.
 - Runnable example `examples/find-recursive` for recursive directive/block lookup.
 
+### Changed
+- Refactored manipulation APIs into focused source files: `directive.go`, `document.go`, and `block.go` (previously grouped in `manipulate.go`).
+- Split manipulation tests into `document_test.go`, `block_test.go`, and `directive_test.go` (previously grouped in `manipulate_test.go`).
+- Internal file organization only; no public API or behavior changes.
+
 ## v0.3.0 - 2026-04-23
 
 ### Added
