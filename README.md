@@ -11,7 +11,7 @@
 - Supports quoted arguments (`"..."` and `'...'`)
 - Supports line continuation using trailing `\\`
 - Optional recursive include resolution for `Include` and `IncludeOptional` with unique line ranges per included file
-- Supports AST manipulation (append/insert/remove/find)
+- Supports AST manipulation (append/insert/remove/find/walk)
 - Supports creating configs from scratch (builder-style API)
 - Renders and writes modified config back to file
 
@@ -70,6 +70,7 @@ func main() {
 - `NewDocument() *Document`
 - `NewDirective(name string, args ...string) Directive`
 - `NewBlock(name string, args ...string) *Block`
+- `WalkFunc func(stmt Statement, depth int) bool`
 - `WithInlineComment() CommentOption`
 - `WithRawCommentText() CommentOption`
 - `(*Document).String() string`
@@ -80,10 +81,16 @@ func main() {
 - `(*Document).AddBlock(name string, args ...string) *Block`
 - `(*Document).AddComment(text string, opts ...CommentOption) error`
 - `(*Document).AddInlineComment(text string) error` (compatibility alias)
+- `(*Document).Walk(fn WalkFunc)`
+- `(*Document).FindDirectivesRecursive(name string) []Directive`
+- `(*Document).FindBlocksRecursive(name string) []*Block`
 - `(*Block).AddDirective(name string, args ...string) *Block`
 - `(*Block).AddBlock(name string, args ...string) *Block`
 - `(*Block).AddComment(text string, opts ...CommentOption) error`
 - `(*Block).AddInlineComment(text string) error` (compatibility alias)
+- `(*Block).Walk(fn WalkFunc)`
+- `(*Block).FindDirectivesRecursive(name string) []Directive`
+- `(*Block).FindBlocksRecursive(name string) []*Block`
 
 `AddComment` normalizes non-empty text by default so rendered comments use `# ` prefix.
 Comment text is rendered safely: newline characters are escaped as `\\n`/`\\r` to avoid multi-line injection.
@@ -120,6 +127,8 @@ Runnable examples are available in `examples/`:
 - `examples/include-optional-skip`: parse config with missing `IncludeOptional` target (skipped)
 - `examples/comment-roundtrip`: parse and render config while preserving comments
 - `examples/backslash-comments`: parse continuation lines using trailing `\` and preserve comments
+- `examples/walk`: depth-first pre-order traversal of mixed AST statements
+- `examples/find-recursive`: recursive directive/block lookup across all nesting levels
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -132,6 +141,8 @@ go run ./examples/include-resolution
 go run ./examples/include-optional-skip
 go run ./examples/comment-roundtrip
 go run ./examples/backslash-comments
+go run ./examples/walk
+go run ./examples/find-recursive
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```
