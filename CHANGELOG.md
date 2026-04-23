@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
-- No unreleased changes yet.
+- Tree traversal API: `type WalkFunc func(stmt Statement, depth int) bool`.
+- Depth-first pre-order traversal methods `(*Document).Walk(fn WalkFunc)` and `(*Block).Walk(fn WalkFunc)` with early-stop support when callback returns false.
+- Recursive search helpers:
+	- `(*Document).FindDirectivesRecursive(name string) []Directive`
+	- `(*Document).FindBlocksRecursive(name string) []*Block`
+	- `(*Block).FindDirectivesRecursive(name string) []Directive`
+	- `(*Block).FindBlocksRecursive(name string) []*Block`
+- Test coverage in `walk_test.go` for non-recursive compatibility, recursive multi-level finds, early walk termination, and mixed directive/block traversal.
+- Runnable example `examples/walk` for full AST traversal with depth-aware output.
+- Runnable example `examples/find-recursive` for recursive directive/block lookup.
 
 ## v0.3.0 - 2026-04-23
 
