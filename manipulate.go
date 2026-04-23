@@ -8,6 +8,10 @@ import (
 // CommentOption configures how a comment is added to a document or block.
 type CommentOption func(*commentOptions)
 
+// WalkFunc is called for each visited statement during Walk.
+// Return false to stop traversal immediately.
+type WalkFunc func(stmt Statement, depth int) bool
+
 type commentOptions struct {
 	inline  bool
 	rawText bool
@@ -125,6 +129,42 @@ func (d *Document) FindBlocks(name string) []*Block {
 	return out
 }
 
+// Walk traverses all document statements depth-first in pre-order.
+// Return false from fn to stop traversal immediately.
+func (d *Document) Walk(fn WalkFunc) {
+	if fn == nil {
+		return
+	}
+	stopped := false
+	walkStatements(d.Statements, 0, fn, &stopped)
+}
+
+// FindDirectivesRecursive returns directives with the given name at any nesting depth (case-insensitive).
+func (d *Document) FindDirectivesRecursive(name string) []Directive {
+	out := make([]Directive, 0)
+	d.Walk(func(stmt Statement, depth int) bool {
+		directive, ok := asDirective(stmt)
+		if ok && strings.EqualFold(directive.Name, name) {
+			out = append(out, directive)
+		}
+		return true
+	})
+	return out
+}
+
+// FindBlocksRecursive returns blocks with the given name at any nesting depth (case-insensitive).
+func (d *Document) FindBlocksRecursive(name string) []*Block {
+	out := make([]*Block, 0)
+	d.Walk(func(stmt Statement, depth int) bool {
+		block, ok := stmt.(*Block)
+		if ok && strings.EqualFold(block.Name, name) {
+			out = append(out, block)
+		}
+		return true
+	})
+	return out
+}
+
 // Append adds a child statement to the block.
 func (b *Block) Append(stmt Statement) {
 	b.Children = append(b.Children, stmt)
@@ -207,6 +247,44 @@ func (b *Block) FindBlocks(name string) []*Block {
 	return out
 }
 
+// Walk traverses this block and all descendants depth-first in pre-order.
+// Return false from fn to stop traversal immediately.
+func (b *Block) Walk(fn WalkFunc) {
+	if fn == nil {
+		return
+	}
+	stopped := false
+	walkStatement(b, 0, fn, &stopped)
+}
+
+// FindDirectivesRecursive returns directives with the given name in descendant statements (case-insensitive).
+func (b *Block) FindDirectivesRecursive(name string) []Directive {
+	out := make([]Directive, 0)
+	stopped := false
+	walkStatements(b.Children, 0, func(stmt Statement, depth int) bool {
+		directive, ok := asDirective(stmt)
+		if ok && strings.EqualFold(directive.Name, name) {
+			out = append(out, directive)
+		}
+		return true
+	}, &stopped)
+	return out
+}
+
+// FindBlocksRecursive returns blocks with the given name in descendant statements (case-insensitive).
+func (b *Block) FindBlocksRecursive(name string) []*Block {
+	out := make([]*Block, 0)
+	stopped := false
+	walkStatements(b.Children, 0, func(stmt Statement, depth int) bool {
+		block, ok := stmt.(*Block)
+		if ok && strings.EqualFold(block.Name, name) {
+			out = append(out, block)
+		}
+		return true
+	}, &stopped)
+	return out
+}
+
 func asDirective(stmt Statement) (Directive, bool) {
 	switch d := stmt.(type) {
 	case Directive:
@@ -216,6 +294,33 @@ func asDirective(stmt Statement) (Directive, bool) {
 	default:
 		return Directive{}, false
 	}
+}
+
+func walkStatements(stmts []Statement, depth int, fn WalkFunc, stopped *bool) {
+	for _, stmt := range stmts {
+		walkStatement(stmt, depth, fn, stopped)
+		if *stopped {
+			return
+		}
+	}
+}
+
+func walkStatement(stmt Statement, depth int, fn WalkFunc, stopped *bool) {
+	if *stopped {
+		return
+	}
+
+	if !fn(stmt, depth) {
+		*stopped = true
+		return
+	}
+
+	block, ok := stmt.(*Block)
+	if !ok {
+		return
+	}
+
+	walkStatements(block.Children, depth+1, fn, stopped)
 }
 
 func addComment(stmts *[]Statement, text string, opts ...CommentOption) error {

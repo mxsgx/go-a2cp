@@ -41,5 +41,7 @@ jobs:
           go run ./examples/include-optional-skip
           go run ./examples/comment-roundtrip
           go run ./examples/backslash-comments
+          go run ./examples/walk
+          go run ./examples/find-recursive
           go run ./examples/manipulate-save
           go run ./examples/from-scratch
