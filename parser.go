@@ -175,6 +175,8 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 		doc.Statements = resolved
 	}
 
+	setParents(doc)
+
 	return doc, nil
 }
 
@@ -231,6 +233,7 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 				return nil, err
 			}
 			s.Children = children
+			setParentOnStatements(s, s.Children)
 			out = append(out, s)
 		default:
 			out = append(out, stmt)

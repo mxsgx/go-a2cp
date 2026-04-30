@@ -1,6 +1,8 @@
 package a2cp
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -282,6 +284,59 @@ func TestParseFileFixture(t *testing.T) {
 	}
 }
 
+func TestParseFileSetsParentPointersFromTempFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	confPath := filepath.Join(tmpDir, "apache.conf")
+
+	src := `<VirtualHost *:80>
+    <Directory /var/www/html>
+        Require all granted
+    </Directory>
+</VirtualHost>
+`
+
+	if err := os.WriteFile(confPath, []byte(src), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	doc, err := ParseFile(confPath)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+
+	roots := doc.FindBlocks("VirtualHost")
+	if len(roots) != 1 {
+		t.Fatalf("root block count = %d, want 1", len(roots))
+	}
+
+	vh := roots[0]
+	if vh.Parent != doc {
+		t.Fatalf("root block parent not document")
+	}
+	if !vh.IsRoot() {
+		t.Fatalf("root block IsRoot() = false, want true")
+	}
+	if got := vh.Depth(); got != 0 {
+		t.Fatalf("root block Depth() = %d, want 0", got)
+	}
+
+	dirs := vh.FindBlocks("Directory")
+	if len(dirs) != 1 {
+		t.Fatalf("nested block count = %d, want 1", len(dirs))
+	}
+
+	dir := dirs[0]
+	if dir.Parent != vh {
+		t.Fatalf("nested block parent mismatch")
+	}
+	if dir.IsRoot() {
+		t.Fatalf("nested block IsRoot() = true, want false")
+	}
+	if got := dir.Depth(); got != 1 {
+		t.Fatalf("nested block Depth() = %d, want 1", got)
+	}
+}
+
 func TestParseFileWithIncludeResolutionHappyPath(t *testing.T) {
 	doc, err := ParseFile("testdata/parser/include/main.conf", WithIncludeResolution("testdata/parser/include"))
 	if err != nil {
@@ -302,6 +357,8 @@ func TestParseFileWithIncludeResolutionHappyPath(t *testing.T) {
 
 	if b, ok := doc.Statements[2].(*Block); !ok || b.Name != "Directory" {
 		t.Fatalf("statement[2] mismatch: %#v", doc.Statements[2])
+	} else if b.Parent != doc {
+		t.Fatalf("statement[2] parent mismatch")
 	}
 
 	if d, ok := doc.Statements[3].(Directive); !ok || d.Name != "Listen" || len(d.Args) != 1 || d.Args[0] != "80" {
