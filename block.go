@@ -10,8 +10,47 @@ func NewBlock(name string, args ...string) *Block {
 	return &Block{Name: name, Args: args}
 }
 
+func (b *Block) statements() []Statement {
+	return b.Children
+}
+
+func (b *Block) setStatements(stmts []Statement) {
+	b.Children = stmts
+}
+
+// IsRoot reports whether block is directly under document root.
+func (b *Block) IsRoot() bool {
+	if b == nil {
+		return false
+	}
+	_, ok := b.Parent.(*Document)
+	return ok
+}
+
+// Depth returns block nesting depth where 0 is root-level.
+func (b *Block) Depth() int {
+	if b == nil || b.Parent == nil {
+		return 0
+	}
+
+	depth := 0
+	cur := b.Parent
+	for {
+		parentBlock, ok := cur.(*Block)
+		if !ok {
+			return depth
+		}
+		depth++
+		if parentBlock.Parent == nil {
+			return depth
+		}
+		cur = parentBlock.Parent
+	}
+}
+
 // Append adds a child statement to the block.
 func (b *Block) Append(stmt Statement) {
+	attachParent(b, stmt)
 	b.Children = append(b.Children, stmt)
 }
 
@@ -48,6 +87,7 @@ func (b *Block) Insert(index int, stmt Statement) error {
 	if index < 0 || index > len(b.Children) {
 		return fmt.Errorf("insert index out of range: %d", index)
 	}
+	attachParent(b, stmt)
 	b.Children = append(b.Children[:index], append([]Statement{stmt}, b.Children[index:]...)...)
 	return nil
 }
@@ -58,6 +98,9 @@ func (b *Block) Remove(index int) (Statement, error) {
 		return nil, fmt.Errorf("remove index out of range: %d", index)
 	}
 	removed := b.Children[index]
+	if block, ok := removed.(*Block); ok {
+		block.Parent = nil
+	}
 	b.Children = append(b.Children[:index], b.Children[index+1:]...)
 	return removed, nil
 }

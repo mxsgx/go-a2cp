@@ -70,7 +70,12 @@ func ParseReader(r io.Reader, opts ...ParseOption) (*Document, error) {
 	if cfg.basePath != "" {
 		baseDir = cfg.basePath
 	}
-	return parseReaderWithContext(r, baseDir, cfg, state)
+	doc, err := parseReaderWithContext(r, baseDir, cfg, state)
+	if err != nil {
+		return nil, err
+	}
+	setParents(doc)
+	return doc, nil
 }
 
 func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state *includeState) (*Document, error) {
@@ -231,6 +236,7 @@ func resolveIncludeStatements(stmts []Statement, baseDir string, cfg parseOption
 				return nil, err
 			}
 			s.Children = children
+			setParentOnStatements(s, s.Children)
 			out = append(out, s)
 		default:
 			out = append(out, stmt)

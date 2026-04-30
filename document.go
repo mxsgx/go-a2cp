@@ -37,8 +37,17 @@ func NewDocument() *Document {
 	return &Document{}
 }
 
+func (d *Document) statements() []Statement {
+	return d.Statements
+}
+
+func (d *Document) setStatements(stmts []Statement) {
+	d.Statements = stmts
+}
+
 // Append adds a statement to the document root.
 func (d *Document) Append(stmt Statement) {
+	attachParent(d, stmt)
 	d.Statements = append(d.Statements, stmt)
 }
 
@@ -75,6 +84,7 @@ func (d *Document) Insert(index int, stmt Statement) error {
 	if index < 0 || index > len(d.Statements) {
 		return fmt.Errorf("insert index out of range: %d", index)
 	}
+	attachParent(d, stmt)
 	d.Statements = append(d.Statements[:index], append([]Statement{stmt}, d.Statements[index:]...)...)
 	return nil
 }
@@ -85,6 +95,9 @@ func (d *Document) Remove(index int) (Statement, error) {
 		return nil, fmt.Errorf("remove index out of range: %d", index)
 	}
 	removed := d.Statements[index]
+	if block, ok := removed.(*Block); ok {
+		block.Parent = nil
+	}
 	d.Statements = append(d.Statements[:index], d.Statements[index+1:]...)
 	return removed, nil
 }

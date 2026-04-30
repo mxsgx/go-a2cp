@@ -129,6 +129,7 @@ Runnable examples are available in `examples/`:
 - `examples/backslash-comments`: parse continuation lines using trailing `\` and preserve comments
 - `examples/walk`: depth-first pre-order traversal of mixed AST statements
 - `examples/find-recursive`: recursive directive/block lookup across all nesting levels
+- `examples/parent-pointer`: navigate upward with `Block.Parent`, `IsRoot()`, and `Depth()`
 - `examples/manipulate-save`: modify AST and save generated config
 - `examples/from-scratch`: build a full config from empty document and save it
 
@@ -143,6 +144,7 @@ go run ./examples/comment-roundtrip
 go run ./examples/backslash-comments
 go run ./examples/walk
 go run ./examples/find-recursive
+go run ./examples/parent-pointer
 go run ./examples/manipulate-save
 go run ./examples/from-scratch
 ```

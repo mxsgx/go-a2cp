@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Test coverage in `walk_test.go` for non-recursive compatibility, recursive multi-level finds, early walk termination, and mixed directive/block traversal.
 - Runnable example `examples/walk` for full AST traversal with depth-aware output.
 - Runnable example `examples/find-recursive` for recursive directive/block lookup.
+- Runnable example `examples/parent-pointer` for upward traversal and parent-safe mutations.
 
 ### Changed
 - Refactored manipulation APIs into focused source files: `directive.go`, `document.go`, and `block.go` (previously grouped in `manipulate.go`).
