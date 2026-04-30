@@ -70,12 +70,7 @@ func ParseReader(r io.Reader, opts ...ParseOption) (*Document, error) {
 	if cfg.basePath != "" {
 		baseDir = cfg.basePath
 	}
-	doc, err := parseReaderWithContext(r, baseDir, cfg, state)
-	if err != nil {
-		return nil, err
-	}
-	setParents(doc)
-	return doc, nil
+	return parseReaderWithContext(r, baseDir, cfg, state)
 }
 
 func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state *includeState) (*Document, error) {
@@ -179,6 +174,8 @@ func parseReaderWithContext(r io.Reader, baseDir string, cfg parseOptions, state
 		}
 		doc.Statements = resolved
 	}
+
+	setParents(doc)
 
 	return doc, nil
 }
